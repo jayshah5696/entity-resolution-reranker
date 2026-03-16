@@ -59,13 +59,25 @@ def deterministic_split(
     ratios: Tuple[float, float, float] = (0.60, 0.20, 0.20)
 ) -> Tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
     
+    # 1. Global Undersampling to balance labels strictly across the entire dataset FIRST
+    pos_df = pairs.filter(pl.col("label") == 1)
+    neg_df = pairs.filter(pl.col("label") == 0)
+    
+    # We want exactly 50/50 overall
+    min_len = min(len(pos_df), len(neg_df))
+    rng = random.Random(seed)
+    
+    if len(pos_df) > min_len:
+        pos_df = pos_df.sample(n=min_len, seed=seed)
+    if len(neg_df) > min_len:
+        neg_df = neg_df.sample(n=min_len, seed=seed)
+        
+    pairs = pl.concat([pos_df, neg_df]).sample(fraction=1.0, seed=seed) # Shuffle
+    
     # We must split such that test set entity_ids are completely disjoint from train/val.
-    # To do this safely, we group by a primary entity ID.
-    # Let's extract all unique entity_ids from A and B sides
     records = pairs.to_dicts()
     
     # Create an adjacency list to find connected components of entity_ids
-    # This ensures that if A matches B, and B matches C, A B C are all in the same split.
     adj = {}
     for r in records:
         ea = r["entity_id_a"]
@@ -88,46 +100,63 @@ def deterministic_split(
                     stack.extend(adj[curr])
             components.append(comp)
             
-    # Shuffle components deterministically
+    # Calculate sizes of each component (number of records within it)
+    comp_metrics = []
+    for comp in components:
+        comp_records = [r for r in records if r["entity_id_a"] in comp]
+        comp_metrics.append({
+            "ids": comp,
+            "size": len(comp_records),
+            "records": comp_records
+        })
+        
+    # Shuffle components
     rng = random.Random(seed)
-    rng.shuffle(components)
+    rng.shuffle(comp_metrics)
     
-    train_comps = set()
-    val_comps = set()
-    test_comps = set()
+    total_records = sum(m["size"] for m in comp_metrics)
+    target_train = int(total_records * ratios[0])
+    target_val = int(total_records * ratios[1])
+    target_test = total_records - target_train - target_val # Remaining
     
-    n_comps = len(components)
-    train_end = int(n_comps * ratios[0])
-    val_end = int(n_comps * (ratios[0] + ratios[1]))
+    bins = {
+        "train": {"records": [], "size": 0, "target": target_train},
+        "val": {"records": [], "size": 0, "target": target_val},
+        "test": {"records": [], "size": 0, "target": target_test}
+    }
     
-    for i, comp in enumerate(components):
-        if i < train_end:
-            train_comps.update(comp)
-        elif i < val_end:
-            val_comps.update(comp)
+    for metric in comp_metrics:
+        # Fill based on proportion of components rather than hard limits, which allows the big component to fall wherever
+        r = rng.random()
+        if r < ratios[0]:
+            bins["train"]["records"].extend(metric["records"])
+            bins["train"]["size"] += metric["size"]
+        elif r < ratios[0] + ratios[1]:
+            bins["val"]["records"].extend(metric["records"])
+            bins["val"]["size"] += metric["size"]
         else:
-            test_comps.update(comp)
+            bins["test"]["records"].extend(metric["records"])
+            bins["test"]["size"] += metric["size"]
             
-    # Now assign records to splits based on entity_id_a
-    train_records = []
-    val_records = []
-    test_records = []
+    # Post-split balancing: Now that the disjoint IDs are guaranteed, we randomly undersample each split internally
+    def balance_split(records_list):
+        if not records_list:
+            return records_list
+        pos = [r for r in records_list if r["label"] == 1]
+        neg = [r for r in records_list if r["label"] == 0]
+        min_c = min(len(pos), len(neg))
+        rng.shuffle(pos)
+        rng.shuffle(neg)
+        return pos[:min_c] + neg[:min_c]
+        
+    train_records = balance_split(bins["train"]["records"])
+    val_records = balance_split(bins["val"]["records"])
+    test_records = balance_split(bins["test"]["records"])
     
-    for r in records:
-        ea = r["entity_id_a"]
-        if ea in train_comps:
-            train_records.append(r)
-        elif ea in val_comps:
-            val_records.append(r)
-        else:
-            test_records.append(r)
-            
     train_df = pl.DataFrame(train_records) if train_records else pl.DataFrame(schema=pairs.schema)
     val_df = pl.DataFrame(val_records) if val_records else pl.DataFrame(schema=pairs.schema)
     test_df = pl.DataFrame(test_records) if test_records else pl.DataFrame(schema=pairs.schema)
     
-    # Note: Label balance within the disjoint groups is hard to guarantee exactly, 
-    # but over a large dataset it approximates the global distribution well enough.
     return train_df, val_df, test_df
 
 def validate_split(train: pl.DataFrame, val: pl.DataFrame, test: pl.DataFrame) -> None:
