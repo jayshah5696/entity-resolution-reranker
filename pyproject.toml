@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "cleanco>=2.3",
+    "doublemetaphone>=1.2",
+    "jellyfish>=1.2.1",
     "names-dataset>=3.3.1",
     "nicknames>=1.0.1",
     "numpy>=2.4.3",
