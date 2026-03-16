@@ -59,99 +59,51 @@ def deterministic_split(
     ratios: Tuple[float, float, float] = (0.60, 0.20, 0.20)
 ) -> Tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
     
-    # 1. Global Undersampling to balance labels strictly across the entire dataset FIRST
-    pos_df = pairs.filter(pl.col("label") == 1)
-    neg_df = pairs.filter(pl.col("label") == 0)
+    # 1. Extract all unique entities and randomly assign them to a split
+    all_ids = set(pairs["entity_id_a"].to_list() + pairs["entity_id_b"].to_list())
+    all_ids = sorted(list(all_ids)) # Sort for determinism
     
-    # We want exactly 50/50 overall
-    min_len = min(len(pos_df), len(neg_df))
     rng = random.Random(seed)
+    rng.shuffle(all_ids)
     
-    if len(pos_df) > min_len:
-        pos_df = pos_df.sample(n=min_len, seed=seed)
-    if len(neg_df) > min_len:
-        neg_df = neg_df.sample(n=min_len, seed=seed)
-        
-    pairs = pl.concat([pos_df, neg_df]).sample(fraction=1.0, seed=seed) # Shuffle
+    n_ids = len(all_ids)
+    train_cutoff = int(n_ids * ratios[0])
+    val_cutoff = int(n_ids * (ratios[0] + ratios[1]))
     
-    # We must split such that test set entity_ids are completely disjoint from train/val.
+    train_id_set = set(all_ids[:train_cutoff])
+    val_id_set = set(all_ids[train_cutoff:val_cutoff])
+    test_id_set = set(all_ids[val_cutoff:])
+    
+    # 2. Route pairs only if BOTH IDs belong to the SAME split.
+    # Cross-split pairs (A in train, B in test) are dropped to strictly prevent data leakage.
     records = pairs.to_dicts()
     
-    # Create an adjacency list to find connected components of entity_ids
-    adj = {}
+    train_recs, val_recs, test_recs = [], [], []
+    
     for r in records:
-        ea = r["entity_id_a"]
-        eb = r["entity_id_b"]
-        adj.setdefault(ea, set()).add(eb)
-        adj.setdefault(eb, set()).add(ea)
-        
-    visited = set()
-    components = []
-    
-    for node in adj.keys():
-        if node not in visited:
-            comp = set()
-            stack = [node]
-            while stack:
-                curr = stack.pop()
-                if curr not in visited:
-                    visited.add(curr)
-                    comp.add(curr)
-                    stack.extend(adj[curr])
-            components.append(comp)
+        ea, eb = r["entity_id_a"], r["entity_id_b"]
+        if ea in train_id_set and eb in train_id_set:
+            train_recs.append(r)
+        elif ea in val_id_set and eb in val_id_set:
+            val_recs.append(r)
+        elif ea in test_id_set and eb in test_id_set:
+            test_recs.append(r)
             
-    # Calculate sizes of each component (number of records within it)
-    comp_metrics = []
-    for comp in components:
-        comp_records = [r for r in records if r["entity_id_a"] in comp]
-        comp_metrics.append({
-            "ids": comp,
-            "size": len(comp_records),
-            "records": comp_records
-        })
-        
-    # Shuffle components
-    rng = random.Random(seed)
-    rng.shuffle(comp_metrics)
-    
-    total_records = sum(m["size"] for m in comp_metrics)
-    target_train = int(total_records * ratios[0])
-    target_val = int(total_records * ratios[1])
-    target_test = total_records - target_train - target_val # Remaining
-    
-    bins = {
-        "train": {"records": [], "size": 0, "target": target_train},
-        "val": {"records": [], "size": 0, "target": target_val},
-        "test": {"records": [], "size": 0, "target": target_test}
-    }
-    
-    for metric in comp_metrics:
-        # Fill based on proportion of components rather than hard limits, which allows the big component to fall wherever
-        r = rng.random()
-        if r < ratios[0]:
-            bins["train"]["records"].extend(metric["records"])
-            bins["train"]["size"] += metric["size"]
-        elif r < ratios[0] + ratios[1]:
-            bins["val"]["records"].extend(metric["records"])
-            bins["val"]["size"] += metric["size"]
-        else:
-            bins["test"]["records"].extend(metric["records"])
-            bins["test"]["size"] += metric["size"]
-            
-    # Post-split balancing: Now that the disjoint IDs are guaranteed, we randomly undersample each split internally
-    def balance_split(records_list):
-        if not records_list:
-            return records_list
-        pos = [r for r in records_list if r["label"] == 1]
-        neg = [r for r in records_list if r["label"] == 0]
+    # 3. Balance labels 50/50 exactly within each constructed split
+    def final_balance(recs):
+        if not recs: return []
+        pos = [r for r in recs if r["label"] == 1]
+        neg = [r for r in recs if r["label"] == 0]
         min_c = min(len(pos), len(neg))
         rng.shuffle(pos)
         rng.shuffle(neg)
-        return pos[:min_c] + neg[:min_c]
+        res = pos[:min_c] + neg[:min_c]
+        rng.shuffle(res)
+        return res
         
-    train_records = balance_split(bins["train"]["records"])
-    val_records = balance_split(bins["val"]["records"])
-    test_records = balance_split(bins["test"]["records"])
+    train_records = final_balance(train_recs)
+    val_records = final_balance(val_recs)
+    test_records = final_balance(test_recs)
     
     train_df = pl.DataFrame(train_records) if train_records else pl.DataFrame(schema=pairs.schema)
     val_df = pl.DataFrame(val_records) if val_records else pl.DataFrame(schema=pairs.schema)
