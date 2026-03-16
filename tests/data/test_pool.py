@@ -51,7 +51,7 @@ def test_name_frequency_weighted():
     top_count = ln_counts.row(0)[1]
     
     # Check that the distribution is not uniform
-    assert top_count >= 3
+    assert top_count >= 20
 
 def test_no_phase1_overlap():
     pool_path = Path("data/pool/base_pool.parquet")
@@ -59,10 +59,20 @@ def test_no_phase1_overlap():
         pytest.skip("Pool not generated yet")
     df = pl.read_parquet(pool_path)
     
-    # If phase 1 data exists, test overlap. For now, just ensure IDs don't match typical phase 1 format
-    # Phase 2 uses a specific prefix or UUIDs
-    ids = df["entity_id"].to_list()
+    phase1_triplets = Path("../entity-resolution-poc/data/processed/triplet_source.parquet")
+    phase1_eval = Path("../entity-resolution-poc/data/eval/eval_profiles.parquet")
+    
+    phase1_ids = set()
+    if phase1_triplets.exists():
+        p1 = pl.read_parquet(phase1_triplets)
+        phase1_ids.update(p1["entity_id"].to_list())
+    if phase1_eval.exists():
+        p2 = pl.read_parquet(phase1_eval)
+        phase1_ids.update(p2["entity_id"].to_list())
+        
+    ids = set(df["entity_id"].to_list())
     assert all(i.startswith("E2-") for i in ids)
+    assert len(ids.intersection(phase1_ids)) == 0
 
 def test_validate_pool_raises():
     bad_df = pl.DataFrame({"entity_id": ["E2-1", "E2-1"], "email": ["a@b.com", "a@b.com"]})

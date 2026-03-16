@@ -160,25 +160,44 @@ def load_ssa_names(path: Path, min_year: int = 1980) -> pl.DataFrame:
         return pl.concat(dfs).group_by(["name", "sex"]).agg(pl.col("count").sum())
     return pl.DataFrame({"name": [], "sex": [], "count": []}, schema={"name": pl.Utf8, "sex": pl.Utf8, "count": pl.Int64})
 
-def load_names_dataset(country_alpha2: str, n: int = 500) -> tuple[list[str], list[int]]:
+def load_names_dataset(country_alpha2: str, n: int = 500) -> tuple[list[str], list[int], list[str], list[int]]:
     from names_dataset import NameDataset
     nd = NameDataset()
-    top = nd.get_top_names(n=n, country_alpha2=country_alpha2)
-    # top structure depends on names-dataset version. Usually it's dicts of male/female
-    # e.g., {'IN': {'M': [{'name': 'X', 'rank': 1}], 'F': [...]}}
-    names = []
-    counts = []
-    country_data = top.get(country_alpha2, {})
+    
+    first_names, first_counts = [], []
+    last_names, last_counts = [], []
+    
+    # Get first names
+    top_first = nd.get_top_names(n=n, use_first_names=True, country_alpha2=country_alpha2)
+    first_data = top_first.get(country_alpha2, {}) if top_first else {}
     for gender in ["M", "F"]:
-        for name_info in country_data.get(gender, []):
+        for name_info in first_data.get(gender, []):
             if isinstance(name_info, dict):
-                names.append(name_info.get('name', ''))
-                # Just placeholder counts since rank is returned, we can invert rank
-                counts.append(1000 - name_info.get('rank', 1))
+                first_names.append(name_info.get('name', ''))
+                first_counts.append(10000 - name_info.get('rank', 1))
             else:
-                 names.append(name_info)
-                 counts.append(1)
-    return names[:n], counts[:n]
+                 first_names.append(name_info)
+                 first_counts.append(1)
+                 
+    # Get last names
+    top_last = nd.get_top_names(n=n, use_first_names=False, country_alpha2=country_alpha2)
+    last_data = top_last.get(country_alpha2, []) if top_last else []
+    # last names are just a list or list of dicts directly under country code
+    for name_info in last_data:
+        if isinstance(name_info, dict):
+            last_names.append(name_info.get('name', ''))
+            last_counts.append(10000 - name_info.get('rank', 1))
+        else:
+             last_names.append(name_info)
+             last_counts.append(1)
+             
+    # Fallback if empty
+    if not first_names:
+        first_names, first_counts = ["Unknown"], [1]
+    if not last_names:
+        last_names, last_counts = ["Unknown"], [1]
+        
+    return first_names[:n*2], first_counts[:n*2], last_names[:n], last_counts[:n]
 
 def load_nicknames() -> dict[str, set[str]]:
     from nicknames import NickNamer

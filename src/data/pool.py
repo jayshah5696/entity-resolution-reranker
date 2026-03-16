@@ -61,10 +61,10 @@ def build_name_pool(ethnicity_targets: dict, census_df: pl.DataFrame, ssa_df: pl
     
     for eth, (country_code, script) in mapping.items():
         if eth in ethnicity_targets:
-            names, counts = load_names_dataset(country_code, n=5000)
+            first_names, first_counts, last_names, last_counts = load_names_dataset(country_code, n=5000)
             pool[eth] = NamePool(
-                given_names=names, given_weights=counts,
-                surnames=names, surname_weights=counts, # approximation for non-US
+                given_names=first_names, given_weights=first_counts,
+                surnames=last_names, surname_weights=last_counts,
                 script=script, country=country_code
             )
             
@@ -95,13 +95,14 @@ def build_company_pool(gleif_df: pl.DataFrame, edgar_df: pl.DataFrame, n_compani
 
 def build_title_pool(onet_alternates: dict, onet_reported: list[str]) -> TitlePool:
     titles = set(onet_reported)
-    functions = []
+    functions = list(onet_alternates.keys())
     for code, alts in onet_alternates.items():
         for alt in alts:
             titles.add(alt)
-            functions.append(alt)
     
-    return TitlePool(titles=list(titles), functions=list(titles)[:100]) # simplification for functions
+    return TitlePool(titles=list(titles), functions=functions)
+
+import re
 
 def generate_email(first: str, last: str, company: str, rng: random.Random) -> str:
     patterns = [
@@ -112,7 +113,8 @@ def generate_email(first: str, last: str, company: str, rng: random.Random) -> s
         f"{first.lower()}",
     ]
     pattern = rng.choices(patterns, weights=[50, 20, 10, 10, 10], k=1)[0]
-    domain = cleanco.basename(company).lower().replace(" ", "").replace(",", "").replace(".", "")
+    domain = cleanco.basename(company).lower()
+    domain = re.sub(r'[^a-z0-9]', '', domain)
     if not domain:
         domain = "example"
     return f"{pattern}@{domain}.com"
@@ -178,7 +180,7 @@ def assemble_base_pool(n: int = 50_000, seed: int = 42) -> pl.DataFrame:
                 "company": comp.name,
                 "title": title,
                 "email": email,
-                "country": npool.country,
+                "country": comp.country,
                 "ethnicity_group": eth,
                 "name_script": npool.script
             })
@@ -206,7 +208,7 @@ def assemble_base_pool(n: int = 50_000, seed: int = 42) -> pl.DataFrame:
                 "company": comp.name,
                 "title": title,
                 "email": email,
-                "country": npool.country,
+                "country": comp.country,
                 "ethnicity_group": eth,
                 "name_script": npool.script
             })
