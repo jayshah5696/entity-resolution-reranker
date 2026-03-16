@@ -7,6 +7,8 @@ import polars as pl
 from pathlib import Path
 from tqdm import tqdm
 
+import subprocess
+
 def download_file(url: str, dest: Path, headers: dict = None):
     if dest.exists() and dest.stat().st_size > 0:
         print(f"Skipping {url}, {dest} already exists.")
@@ -26,6 +28,11 @@ def download_file(url: str, dest: Path, headers: dict = None):
                     size = file.write(data)
                     bar.update(size)
 
+def download_file_curl(url: str, dest: Path):
+    print(f"Downloading (via curl) {url} to {dest}")
+    cmd = ["curl", "-L", "-o", str(dest), "-C", "-", url]
+    subprocess.run(cmd, check=False) # check=False because curl returns 33 if resuming a completed file
+
 def download_gleif(output_dir: Path) -> Path:
     api_url = "https://goldencopy.gleif.org/api/v2/golden-copies/publishes"
     headers = {'Accept': 'application/json'}
@@ -34,7 +41,7 @@ def download_gleif(output_dir: Path) -> Path:
     data = resp.json()
     url = data['data'][0]['lei2']['full_file']['csv']['url']
     zip_path = output_dir / "gleif.zip"
-    download_file(url, zip_path)
+    download_file_curl(url, zip_path)
     
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
         for name in zip_ref.namelist():
@@ -88,12 +95,12 @@ def download_onet(output_dir: Path) -> Path:
     return output_dir
 
 def parse_onet_alternates(path: Path) -> dict[str, list[str]]:
-    # Alternate Titles: O*NET-SOC Code	Title	Alternate Title	Short Title	Sources
+    # Alternate Titles: O*NET-SOC Code	Alternate Title	Short Title	Sources
     df = pl.read_csv(path, separator="\t", ignore_errors=True)
     mapping = {}
-    if "Title" in df.columns and "Alternate Title" in df.columns:
+    if "O*NET-SOC Code" in df.columns and "Alternate Title" in df.columns:
         for row in df.iter_rows(named=True):
-            title = row["Title"]
+            title = row["O*NET-SOC Code"]
             alt = row["Alternate Title"]
             if title not in mapping:
                 mapping[title] = []
@@ -132,27 +139,14 @@ def load_census_surnames(path: Path) -> pl.DataFrame:
     return df.select(["name", "count"]).cast({"count": pl.Int64}).drop_nulls()
 
 def download_ssa_names(output_dir: Path) -> Path:
-    # Use Kaggle/GitHub mirror since ssa.gov blocks automated requests
-    url = "https://raw.githubusercontent.com/hadley/data-baby-names/master/baby-names.csv"
-    zip_path = output_dir / "ssa_names.csv"
+    # Use Internet Archive mirror since ssa.gov blocks automated requests
+    url = "https://web.archive.org/web/20230623121516/https://www.ssa.gov/oact/babynames/names.zip"
+    zip_path = output_dir / "ssa_names.zip"
     download_file(url, zip_path)
     extract_dir = output_dir / "ssa_names"
     extract_dir.mkdir(exist_ok=True)
-    
-    # We will generate a fake yob2000.txt to satisfy load_ssa_names logic
-    df = pl.read_csv(zip_path, ignore_errors=True)
-    # The columns are year, name, percent, sex.
-    # Convert into yob format: name,sex,count
-    if "name" in df.columns:
-        df = df.rename({"name": "name", "sex": "sex", "percent": "count"}) if "percent" in df.columns else df
-        out_df = df.select(["name", "sex", "year"]) if "year" in df.columns else df
-        out_path = extract_dir / "yob2000.txt"
-        with open(out_path, "w") as f:
-            f.write("Michael,M,10000\nJessica,F,9000\n")
-    else:
-        with open(extract_dir / "yob2000.txt", "w") as f:
-            f.write("Michael,M,10000\nJessica,F,9000\n")
-            
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_dir)
     return extract_dir
 
 def load_ssa_names(path: Path, min_year: int = 1980) -> pl.DataFrame:
