@@ -22,37 +22,35 @@ def test_build_prompt():
     assert "JSON array" in prompt
 
 def test_parse_response_valid():
-    response_text = '```json\n["W. Chen", "Chen Wei", "Way Chen"]\n```'
+    response_text = '```json\n[{"variation": "W. Chen", "type": "NL3"}, {"variation": "Chen Wei", "type": "NL2"}]\n```'
     parsed = _parse_response(response_text)
-    assert parsed == ["W. Chen", "Chen Wei", "Way Chen"]
+    assert len(parsed) == 2
+    assert parsed[0]["variation"] == "W. Chen"
     
 def test_parse_response_malformed():
     response_text = 'Here are the corruptions:\n1. W. Chen\n2. Chen Wei'
     parsed = _parse_response(response_text)
     assert parsed == []
 
-@patch("src.data.corrupt_llm.OpenAI")
-def test_generate_nonlatin_corruptions(mock_openai_class):
-    # Setup mock
+def test_generate_nonlatin_corruptions():
+    # Setup mock without @patch decorator since we pass client manually
     mock_client = Mock()
     mock_response = Mock()
-    mock_response.choices = [Mock(message=Mock(content='["Wei C.", "Chen Wei"]'))]
+    mock_response.choices = [Mock(message=Mock(content='[{"variation": "Wei C.", "type": "NL3"}, {"variation": "Chen Wei", "type": "NL2"}]'))]
     mock_client.chat.completions.create.return_value = mock_response
-    mock_openai_class.return_value = mock_client
     
     records = [
         {"entity_id": "1", "first_name": "Wei", "last_name": "Chen", "ethnicity_group": "chinese"}
     ]
     
-    # We pass the mocked client directly to avoid recreating it
+    # We pass the mocked client directly
     results = generate_nonlatin_corruptions(records, client=mock_client, model="google/gemini-2.5-flash-lite-preview", batch_size=20)
     
-    # Each valid corruption should produce a new pair dict
+    # Each valid corruption should produce a new pair dict, overwriting first/last
     assert len(results) == 2
-    # The first corruption is "Wei C." so parts are "Wei" and "C."
-    assert results[0]["first_name_corrupted"] == "Wei" 
-    assert results[0]["last_name_corrupted"] == "C." 
-    assert results[0]["corruption_code"].startswith("NL")
+    assert results[0]["first_name"] == "Wei" 
+    assert results[0]["last_name"] == "C." 
+    assert results[0]["corruption_code"] == "NL3"
     
 def test_filter_by_ce_score():
     pairs = [

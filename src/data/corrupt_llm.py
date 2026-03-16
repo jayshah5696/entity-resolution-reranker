@@ -16,18 +16,22 @@ def _build_prompt(record: dict) -> str:
     First Name: {fn}
     Last Name: {ln}
     
-    The variations should reflect common real-world errors such as:
-    - Transliteration or romanization differences
-    - Order swapping (e.g., surname first)
-    - Dropping parts of the name
-    - Common typos or misspellings specific to this origin
+    Return ONLY a raw JSON array of objects. Each object must have a "variation" string and a "type" code.
+    Allowed "type" codes (select the 3 most appropriate):
+    - "NL1": Transliteration/Romanization difference
+    - "NL2": Order swap (e.g. surname first)
+    - "NL3": Dropped middle or part of name
+    - "NL4": Common spelling error/typo
+    - "NL5": Phonetic substitution
+    - "NL6": Honorific/title addition or removal
+    - "NL7": Script mixture or encoding issue
     
-    Return ONLY a raw JSON array of strings containing the full corrupted names. Do not include markdown formatting or explanations.
-    Example: ["Variation 1", "Variation 2", "Variation 3"]
+    Do not include markdown formatting or explanations.
+    Example: [{{"variation": "Chen Wei", "type": "NL2"}}, {{"variation": "Way Chen", "type": "NL5"}}]
     """
     return prompt.strip()
 
-def _parse_response(response_text: str) -> list[str]:
+def _parse_response(response_text: str) -> list[dict]:
     # Strip markdown block quotes if the model adds them despite instructions
     text = response_text.strip()
     if text.startswith("```json"):
@@ -39,7 +43,7 @@ def _parse_response(response_text: str) -> list[str]:
         
     try:
         parsed = json.loads(text.strip())
-        if isinstance(parsed, list) and all(isinstance(i, str) for i in parsed):
+        if isinstance(parsed, list) and all(isinstance(i, dict) and "variation" in i and "type" in i for i in parsed):
             return parsed
     except json.JSONDecodeError:
         pass
@@ -47,41 +51,61 @@ def _parse_response(response_text: str) -> list[str]:
     return []
 
 def generate_nonlatin_corruptions(records: list[dict], client: Any, model: str, batch_size: int = 20) -> list[dict]:
+    import time
     results = []
     
-    # Simple batching isn't strictly needed if we're doing synchronous calls,
-    # but the interface requests a batch_size parameter. We will loop.
-    for record in tqdm(records, desc="Generating LLM Corruptions"):
-        if record.get("ethnicity_group") == "us_uk_english":
-            continue
-            
-        prompt = _build_prompt(record)
+    for i in tqdm(range(0, len(records), batch_size), desc="Generating LLM Corruptions"):
+        batch = records[i:i+batch_size]
         
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-            )
-            content = response.choices[0].message.content
-            corruptions = _parse_response(content)
+        # We process the batch sequentially because openrouter api isn't batched for text generation,
+        # but the grouping allows us to simulate batched control flow if needed.
+        for record in batch:
+            if record.get("ethnicity_group") == "us_uk_english":
+                continue
+                
+            prompt = _build_prompt(record)
             
-            for i, c_name in enumerate(corruptions):
-                # We simply assign the full corrupted string to first_name for simplicity in the pipeline,
-                # or try to split it heuristically. The plan specifies mapping it to name fields.
-                parts = c_name.split(maxsplit=1)
-                new_fn = parts[0] if len(parts) > 0 else ""
-                new_ln = parts[1] if len(parts) > 1 else ""
-                
-                new_record = record.copy()
-                new_record["first_name_corrupted"] = new_fn
-                new_record["last_name_corrupted"] = new_ln
-                # Map to NL codes (NL1-NL7) randomly or sequentially
-                new_record["corruption_code"] = f"NL{random.randint(1, 7)}"
-                results.append(new_record)
-                
-        except Exception as e:
-            print(f"Error generating corruption for {record['entity_id']}: {e}")
+            max_retries = 2
+            for attempt in range(max_retries + 1):
+                try:
+                    response = client.chat.completions.create(
+                        model=model,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.7,
+                    )
+                    content = response.choices[0].message.content
+                    corruptions = _parse_response(content)
+                    
+                    if not corruptions and attempt < max_retries:
+                        continue # retry on malformed
+                        
+                    for c_obj in corruptions:
+                        c_name = c_obj["variation"]
+                        c_type = c_obj["type"]
+                        
+                        # Better naive split
+                        parts = c_name.split()
+                        if len(parts) == 0:
+                            continue
+                        elif len(parts) == 1:
+                            new_fn = parts[0]
+                            new_ln = ""
+                        else:
+                            new_fn = parts[0]
+                            new_ln = " ".join(parts[1:])
+                        
+                        new_record = record.copy()
+                        new_record["first_name"] = new_fn
+                        new_record["last_name"] = new_ln
+                        new_record["corruption_code"] = c_type
+                        results.append(new_record)
+                        
+                    break # success
+                except Exception as e:
+                    if attempt == max_retries:
+                        print(f"Error generating corruption for {record.get('entity_id')}: {e}")
+                    else:
+                        time.sleep(1) # short backoff
             
     return results
 
