@@ -136,7 +136,7 @@ def load_census_surnames(path: Path) -> pl.DataFrame:
         # 2010 census CSV usually has name as first col, count as third.
         df = df.rename({df.columns[0]: "name", df.columns[2]: "count"})
         
-    return df.select(["name", "count"]).cast({"count": pl.Int64}).drop_nulls()
+    return df.select(["name", "count"]).cast({"count": pl.Int64}).drop_nulls().filter(pl.col("name") != "ALL OTHER NAMES")
 
 def download_ssa_names(output_dir: Path) -> Path:
     # Use Internet Archive mirror since ssa.gov blocks automated requests
