@@ -1,0 +1,50 @@
+sources:
+  - name: names-dataset
+  - name: census
+ethnicity_distribution:
+  us_uk_english: 0.25
+  indian: 0.20
+  chinese: 0.15
+  hispanic: 0.15
+  arabic: 0.10
+  other: 0.15
+corruption_codes:
+  - C1
+  - C2
+  - C3
+  - C4
+  - C5
+  - C6
+  - C7
+  - C8
+  - N1
+  - N2
+  - N3
+  - N4
+  - N5
+  - N6
+  - N7
+  - N8
+  - N9
+  - N10
+  - N11
+  - N12
+  - N13
+  - N14
+  - N15
+  - N16
+  - T1
+  - T2
+  - T3
+  - T4
+  - T5
+  - T6
+  - E1
+  - E2
+  - NL1
+  - NL2
+  - NL3
+  - NL4
+  - NL5
+  - NL6
+  - NL7

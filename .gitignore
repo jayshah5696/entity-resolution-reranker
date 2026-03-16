@@ -1,0 +1,147 @@
+# ── Python ─────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+*.pyo
+backup_indexes/*
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.lance
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyright/
+
+# Ruff / linting cache
+.ruff_cache/
+
+# ── Secrets ────────────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets.yaml
+secrets.json
+
+# ── Data ───────────────────────────────────────────────────────────────────────
+# Ignore all data files but keep directory structure via .gitkeep
+data/raw/*
+data/processed/*
+data/triplets/*
+data/eval/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/triplets/.gitkeep
+!data/eval/.gitkeep
+
+# ── Models ──────────────────────────────────────────────────────────────────────
+# Model checkpoints are large — store externally (HuggingFace Hub, S3, etc.)
+# Note: /models/ (root-level) is ignored; src/models/ (source code) is NOT ignored
+/models/
+!/models/.gitkeep
+
+# HuggingFace cache
+.cache/
+~/.cache/huggingface/
+
+# ── Results ───────────────────────────────────────────────────────────────────
+# CSV files can be large and contain repeated data — regenerate from JSONs
+results/*.csv
+results/*.parquet
+# Keep individual experiment JSONs and .gitkeep
+!results/.gitkeep
+!results/*.json
+
+# ── Notebooks ─────────────────────────────────────────────────────────────────
+# Keep notebooks but ignore checkpoint dirs and outputs
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+# Uncomment to strip notebook outputs from git:
+# *.ipynb
+
+# ── W&B / Experiment Tracking ─────────────────────────────────────────────────
+wandb/
+mlruns/
+.mlflow/
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+*.iml
+.project
+.settings/
+
+# ── FAISS Index Files ─────────────────────────────────────────────────────────
+# Large binary index files — regenerate from embeddings
+*.index
+*.faiss
+*.ivf
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.temp
+*.bak
+.spyderproject.cfg
+.spyproject/
+.rope_project/
+
+# ── uv ────────────────────────────────────────────────────────────────────────
+# uv.lock is committed (reproducible installs)
+# uv cache is not
+.uv/
+*.pi/

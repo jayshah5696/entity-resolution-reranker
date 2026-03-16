@@ -1,0 +1,8 @@
+training:
+  epochs: 5
+  batch_size: 32
+  lr: 2e-5
+  seed: 42
+loss:
+  phase1_loss: bce
+  phase2_loss: lambda_rank

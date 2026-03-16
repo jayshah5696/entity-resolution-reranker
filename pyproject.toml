@@ -1,0 +1,16 @@
+[project]
+name = "entity-resolution-reranker"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "cleanco>=2.3",
+    "names-dataset>=3.3.1",
+    "nicknames>=1.0.1",
+    "polars>=1.39.0",
+    "pytest>=9.0.2",
+    "pyyaml>=6.0.3",
+    "requests>=2.32.5",
+    "tqdm>=4.67.3",
+]

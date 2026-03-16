@@ -1,0 +1,27 @@
+minilm_reranker:
+  hf_id: cross-encoder/ms-marco-MiniLM-L-6-v2
+  license: apache-2.0
+  params: 22M
+  context: 512
+  fine_tuned: false
+
+gte_reranker:
+  hf_id: Alibaba-NLP/gte-reranker-modernbert-base
+  license: mit
+  params: 149M
+  context: 8192
+  fine_tuned: false
+
+bge_reranker_m3:
+  hf_id: BAAI/bge-reranker-v2-m3
+  license: mit
+  params: 567M
+  context: 8192
+  fine_tuned: false
+
+granite_reranker:
+  hf_id: ibm-granite/granite-3.0-reranker
+  license: apache-2.0
+  params: 400M
+  context: 8192
+  fine_tuned: false

@@ -1,0 +1,8 @@
+phase1:
+  index_root: /path/to/phase1/indexes
+eval:
+  top_k_stage1: 50
+metrics:
+  - f1
+  - mrr
+  - ndcg
