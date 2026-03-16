@@ -189,3 +189,38 @@ def apply_deterministic_filter(pairs: list[dict]) -> list[dict]:
         if not is_false_negative(p["record_a"], p["record_b"]):
             filtered.append(p)
     return filtered
+
+if __name__ == "__main__":
+    import argparse
+    from pathlib import Path
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pool", type=Path, required=True)
+    parser.add_argument("--output", type=Path, default=Path("data/pairs/negatives.parquet"))
+    args = parser.parse_args()
+    
+    pool = pl.read_parquet(args.pool)
+    pairs = []
+    
+    # Simple execution of all miners for the CLI
+    print("Mining NEG1...")
+    pairs.extend(mine_same_company_diff_person(pool, max_pairs=5000))
+    print("Mining NEG2...")
+    pairs.extend(mine_phonetic_neighbor(pool, max_pairs=5000))
+    # mock census for NEG3
+    census_mock = pl.DataFrame({"name": ["SMITH", "JOHNSON", "WILLIAMS", "BROWN", "JONES"]})
+    print("Mining NEG3...")
+    pairs.extend(mine_common_name_diff_company(pool, census_mock, top_n=5, max_pairs=5000))
+    print("Mining NEG4...")
+    pairs.extend(mine_title_function_swap(pool, {}, max_pairs=5000))
+    print("Mining NEG5...")
+    pairs.extend(mine_title_level_swap(pool, max_pairs=5000))
+    print("Mining NEG6...")
+    pairs.extend(mine_random(pool, max_pairs=5000))
+    print("Mining NEG7...")
+    pairs.extend(mine_bm25_hard_negatives(pool, max_pairs=5000))
+    
+    filtered = apply_deterministic_filter(pairs)
+    
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(filtered).write_parquet(args.output)
+    print(f"Saved {len(filtered)} negative pairs to {args.output}")

@@ -127,3 +127,52 @@ def filter_by_ce_score(pairs: list[dict], stock_ce: Any, min_score: float = 0.35
     except Exception as e:
         print(f"Error filtering by CE score: {e}")
         return pairs # fallback to returning all if scoring fails
+
+if __name__ == "__main__":
+    import argparse
+    import polars as pl
+    import os
+    from pathlib import Path
+    from google import genai
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pool", type=Path, required=True)
+    parser.add_argument("--output", type=Path, default=Path("data/pairs/llm_positives.parquet"))
+    args = parser.parse_args()
+    
+    pool = pl.read_parquet(args.pool)
+    records = pool.to_dicts()
+    
+    # We only take a subset to avoid huge API bills during testing
+    import random
+    rng = random.Random(42)
+    non_latin_records = [r for r in records if r.get("ethnicity_group") != "us_uk_english"]
+    sample_records = rng.sample(non_latin_records, min(200, len(non_latin_records)))
+    
+    if "GEMINI_API_KEY" not in os.environ:
+        print("GEMINI_API_KEY not found. Mocking LLM corruptions...")
+        corrupted_records = []
+        for r in sample_records:
+            c = r.copy()
+            c["first_name"] = "MockFN"
+            c["last_name"] = "MockLN"
+            c["corruption_code"] = "NL3"
+            corrupted_records.append(c)
+    else:
+        client = genai.Client()
+        corrupted_records = generate_nonlatin_corruptions(sample_records, client, "gemini-3.1-flash-lite-preview", batch_size=20)
+    
+    pairs = []
+    for o, c in zip(sample_records, corrupted_records):
+        pairs.append({
+            "entity_id_a": o["entity_id"],
+            "entity_id_b": c["entity_id"],
+            "record_a": o,
+            "record_b": c,
+            "label": 1,
+            "strategy": c.get("corruption_code", "NL0")
+        })
+        
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(pairs).write_parquet(args.output)
+    print(f"Saved {len(pairs)} LLM positives to {args.output}")

@@ -403,3 +403,34 @@ def corrupt_record(record: dict, codes: list[str], rng: random.Random = None) ->
         if code in CORRUPTION_HANDLERS:
             corrupted = CORRUPTION_HANDLERS[code](corrupted, rng)
     return corrupted
+
+if __name__ == "__main__":
+    import argparse
+    import polars as pl
+    from pathlib import Path
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pool", type=Path, required=True)
+    parser.add_argument("--output", type=Path, default=Path("data/pairs/rule_positives.parquet"))
+    args = parser.parse_args()
+    
+    pool = pl.read_parquet(args.pool)
+    records = pool.to_dicts()
+    pairs = []
+    rng = random.Random(42)
+    
+    for r in records:
+        n_codes = rng.randint(1, 3)
+        codes = rng.sample(CORRUPTION_CODES, n_codes)
+        c_r = corrupt_record(r, codes, rng)
+        pairs.append({
+            "entity_id_a": r["entity_id"],
+            "entity_id_b": c_r["entity_id"],
+            "record_a": r,
+            "record_b": c_r,
+            "label": 1,
+            "strategy": ",".join(codes)
+        })
+    
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(pairs).write_parquet(args.output)
+    print(f"Saved {len(pairs)} rule positives to {args.output}")
