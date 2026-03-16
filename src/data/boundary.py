@@ -7,6 +7,10 @@ from tqdm import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 from src.data.serialize import pipe_serialize
+from pydantic import BaseModel, Field
+
+class LabelsResponse(BaseModel):
+    labels: list[str] = Field(description="A list of strings. Each string must be exactly one of: 'MATCH', 'NON-MATCH', or 'AMBIGUOUS'. The length must match the number of pairs provided.")
 
 def load_phase1_biencoder() -> SentenceTransformer:
     # Loads the GTE model fine-tuned from Phase 1. 
@@ -60,9 +64,6 @@ Some differences are just typos, nicknames, or missing fields (which is a MATCH)
 If they represent different people (e.g. different names with no phonetic relation, or different companies/emails that clearly conflict), it is a NON-MATCH.
 If there is not enough information to decide confidently, it is AMBIGUOUS.
 
-Return ONLY a JSON array of strings, where each string is exactly one of: "MATCH", "NON-MATCH", or "AMBIGUOUS".
-The array must have exactly the same length as the number of pairs provided.
-
 Pairs to evaluate:
 """
     for idx, (a, b, score) in enumerate(pairs):
@@ -72,24 +73,8 @@ Pairs to evaluate:
         
     return prompt.strip()
 
-def parse_llm_labels(response_text: str) -> list[str]:
-    text = response_text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    if text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-        
-    try:
-        parsed = json.loads(text.strip())
-        if isinstance(parsed, list) and all(i in ["MATCH", "NON-MATCH", "AMBIGUOUS"] for i in parsed):
-            return parsed
-    except json.JSONDecodeError:
-        pass
-    return []
-
 def label_with_llm(pairs: list[tuple[dict, dict, float]], client: Any, model: str, batch_size: int = 50) -> list[dict]:
+    from google import genai
     results = []
     
     for i in tqdm(range(0, len(pairs), batch_size), desc="LLM Labeling"):
@@ -99,13 +84,20 @@ def label_with_llm(pairs: list[tuple[dict, dict, float]], client: Any, model: st
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
-                response = client.chat.completions.create(
+                response = client.models.generate_content(
                     model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.0,
+                    contents=prompt,
+                    config=genai.types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=LabelsResponse,
+                        temperature=0.0,
+                    ),
                 )
-                content = response.choices[0].message.content
-                labels = parse_llm_labels(content)
+                
+                if not response.parsed or not response.parsed.labels:
+                    raise ValueError("Failed to parse structured output")
+                    
+                labels = response.parsed.labels
                 
                 if len(labels) != len(batch):
                     if attempt < max_retries:
