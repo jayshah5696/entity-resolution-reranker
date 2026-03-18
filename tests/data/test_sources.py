@@ -16,9 +16,11 @@ from src.data.sources import (
 )
 
 def test_names_dataset():
-    names, counts = load_names_dataset("IN", n=50)
-    assert len(names) > 0
-    assert len(names) == len(counts)
+    fn, fc, ln, lc = load_names_dataset("IN", n=50)
+    assert len(fn) > 0
+    assert len(fn) == len(fc)
+    assert len(ln) > 0
+    assert len(ln) == len(lc)
 
 def test_nicknames():
     nn = load_nicknames()
