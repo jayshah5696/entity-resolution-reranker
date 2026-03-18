@@ -1,0 +1,5 @@
+{
+  "experiment_id": "004",
+  "stage1_model": "gte_modernbert_base_ft",
+  "reranker": "gte_reranker"
+}

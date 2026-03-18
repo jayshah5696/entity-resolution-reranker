@@ -1,0 +1,23 @@
+{
+  "experiment_id": "007",
+  "latency": {
+    "stage1_ms": 0.00095367431640625,
+    "stage2_ms": 308.40396881103516
+  },
+  "metrics": {
+    "overall": {
+      "recall_at_10": 1.0,
+      "recall_at_50": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_10": 1.0,
+      "recall_retention": 1.0,
+      "f1_best": 1.0,
+      "f1_threshold": 0.01
+    },
+    "per_bucket": {
+      "exact_match": {
+        "recall_at_10": 1.0
+      }
+    }
+  }
+}

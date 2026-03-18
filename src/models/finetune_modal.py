@@ -48,7 +48,7 @@ def finetune_one(model_key: str, dry_run: bool = False):
     # To keep the function simple and self-contained for the stub, we resolve it directly:
     hf_models = {
         "gte_reranker": "Alibaba-NLP/gte-reranker-modernbert-base",
-        "granite_reranker": "ibm-granite/granite-3.0-reranker"
+        "granite_reranker": "ibm-granite/granite-embedding-reranker-english-r2"
     }
     
     base_model = hf_models.get(model_key)

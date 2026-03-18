@@ -20,8 +20,8 @@ bge_reranker_m3:
   fine_tuned: false
 
 granite_reranker:
-  hf_id: ibm-granite/granite-3.0-reranker
+  hf_id: ibm-granite/granite-embedding-reranker-english-r2
   license: apache-2.0
-  params: 400M
+  params: 149M
   context: 8192
   fine_tuned: false

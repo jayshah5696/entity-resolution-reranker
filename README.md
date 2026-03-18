@@ -9,6 +9,7 @@ Phase 2 builds upon the dual-encoder baseline from Phase 1 by implementing a two
 
 ## Architecture
 
+### Model Flow
 ```mermaid
 graph TD;
     A[Raw Profiles] --> B(Bi-Encoder Embeddings)
@@ -19,6 +20,59 @@ graph TD;
     C --> G[Top 50 Candidates]
     G --> H[Cross-Encoder Reranker]
     H --> I[Scored & Ranked Results]
+```
+
+### Data Generation Pipeline
+```mermaid
+graph TD;
+    %% Data Sources
+    A1[US Census Surnames] --> B[Name & Title Pools]
+    A2[SSA Baby Names] --> B
+    A3[Names Dataset] --> B
+    A4[O*NET Job Titles] --> B
+    A5[GLEIF Legal Entities] --> C[Company Pool]
+    A6[SEC EDGAR] --> C
+
+    %% Core Pool
+    B --> D[Global Entity Pool]
+    C --> D
+    D -- 50,000 baseline records --> E[Base Parquet]
+
+    %% Corruptions
+    E --> F[Rule-Based Corruptions]
+    F -.-> F1[Company: Acronyms, Typos, Rebrands]
+    F -.-> F2[Name: Swaps, OCR errors, Keyboards]
+    F -.-> F3[Title & Email Swaps]
+    
+    E --> G[LLM Corruptions]
+    G -.-> G1[Gemini structured variation generation]
+
+    %% Negatives
+    E --> H[Negative Mining]
+    H -.-> H1[Phonetic Match, Company Swap]
+    H -.-> H2[Title swaps, hard BM25 overlaps]
+
+    %% Boundary
+    E --> I[Bi-Encoder Boundary Mining]
+    I -.-> I1[Sim>0.6 & Sim<0.9 filter]
+    I1 --> I2[LLM Arbitrated Match/Non-Match labels]
+
+    %% Assembly
+    F --> J[Pairs Assembly]
+    G --> J
+    H --> J
+    I2 --> J
+
+    %% Split
+    J --> K[MinHash Deduplication]
+    K --> L[Strict Entity Disjoint Sizing]
+    L -- Mathematically Isolated Anchors --> M[60/20/20 Target Splits]
+    M --> N[Global 50/50 Label Undersampling]
+    
+    %% Outputs
+    N --> O1[(ce_train.parquet)]
+    N --> O2[(ce_val.parquet)]
+    N --> O3[(ce_test.parquet)]
 ```
 
 ## Setup & Installation
