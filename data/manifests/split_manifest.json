@@ -1,0 +1,6 @@
+{
+  "train_rows": 33238,
+  "val_rows": 3794,
+  "test_rows": 3650,
+  "total_rows": 40682
+}

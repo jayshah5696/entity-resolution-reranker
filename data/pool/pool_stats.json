@@ -1,0 +1,43 @@
+{
+  "row_count": 50000,
+  "ethnicity_distribution": [
+    {
+      "ethnicity_group": "us_uk_english",
+      "count": 12500
+    },
+    {
+      "ethnicity_group": "chinese",
+      "count": 7500
+    },
+    {
+      "ethnicity_group": "arabic",
+      "count": 5000
+    },
+    {
+      "ethnicity_group": "hispanic",
+      "count": 7500
+    },
+    {
+      "ethnicity_group": "indian",
+      "count": 10000
+    },
+    {
+      "ethnicity_group": "other",
+      "count": 7500
+    }
+  ],
+  "script_distribution": [
+    {
+      "name_script": "latin",
+      "count": 37500
+    },
+    {
+      "name_script": "arabic",
+      "count": 5000
+    },
+    {
+      "name_script": "cjk",
+      "count": 7500
+    }
+  ]
+}

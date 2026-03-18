@@ -145,3 +145,4 @@ Thumbs.db
 # uv cache is not
 .uv/
 *.pi/
+*.parquet

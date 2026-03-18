@@ -1,0 +1,7 @@
+{
+  "repo_id": "jayshah5696/entity-resolution-ce-pairs-v2",
+  "train_rows": 33238,
+  "val_rows": 3794,
+  "test_rows": 0,
+  "status": "pushed"
+}
