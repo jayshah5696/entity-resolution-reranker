@@ -36,15 +36,21 @@ def test_generate_nonlatin_corruptions():
     # Setup mock without @patch decorator since we pass client manually
     mock_client = Mock()
     mock_response = Mock()
-    mock_response.choices = [Mock(message=Mock(content='[{"variation": "Wei C.", "type": "NL3"}, {"variation": "Chen Wei", "type": "NL2"}]'))]
-    mock_client.chat.completions.create.return_value = mock_response
+    
+    # Mock the google-genai Pydantic parsed response
+    from src.data.corrupt_llm import CorruptionsResponse, VariationObj
+    mock_response.parsed = CorruptionsResponse(corruptions=[
+        VariationObj(variation="Wei C.", type="NL3"),
+        VariationObj(variation="Chen Wei", type="NL2")
+    ])
+    mock_client.models.generate_content.return_value = mock_response
     
     records = [
         {"entity_id": "1", "first_name": "Wei", "last_name": "Chen", "ethnicity_group": "chinese"}
     ]
     
     # We pass the mocked client directly
-    results = generate_nonlatin_corruptions(records, client=mock_client, model="google/gemini-2.5-flash-lite-preview", batch_size=20)
+    results = generate_nonlatin_corruptions(records, client=mock_client, model="gemini-3.1-flash-lite-preview", batch_size=20)
     
     # Each valid corruption should produce a new pair dict, overwriting first/last
     assert len(results) == 2
