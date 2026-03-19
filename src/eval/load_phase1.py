@@ -11,11 +11,12 @@ def load_phase1_index(index_path: Path, model_key: str, device: str = "cpu"):
     import lancedb
     from sentence_transformers import SentenceTransformer
     
-    db = lancedb.connect(index_path)
-    if "profiles" not in db.table_names():
-        raise FileNotFoundError(f"profiles table not found in {index_path}")
+    # In Phase 1, the DB is the parent directory and the table is "index"
+    db = lancedb.connect(index_path.parent)
+    if "index" not in db.table_names():
+        raise FileNotFoundError(f"index table not found in {index_path.parent}")
         
-    table = db.open_table("profiles")
+    table = db.open_table("index")
     # Actually need to fetch from model config
     hf_id = "Alibaba-NLP/gte-modernbert-base"
     if model_key == "gte_modernbert_base_ft":
@@ -45,8 +46,8 @@ def load_bm25_index(bm25_path: Path):
     """
     import lancedb
     # Connect to the LanceDB instance used for BM25 FTS
-    db = lancedb.connect(bm25_path)
-    if "profiles" not in db.table_names():
+    db = lancedb.connect(bm25_path.parent)
+    if "index" not in db.table_names():
         return None
-    table = db.open_table("profiles")
+    table = db.open_table("index")
     return table
