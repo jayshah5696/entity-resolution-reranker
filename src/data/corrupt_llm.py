@@ -50,15 +50,23 @@ def _parse_response(response_text: str) -> list[dict]:
         
     return []
 
+from pydantic import BaseModel, Field
+
+class VariationObj(BaseModel):
+    variation: str
+    type: str
+
+class CorruptionsResponse(BaseModel):
+    corruptions: list[VariationObj] = Field(description="List of exactly 3 variations.")
+
 def generate_nonlatin_corruptions(records: list[dict], client: Any, model: str, batch_size: int = 20) -> list[dict]:
     import time
+    from google import genai
     results = []
     
     for i in tqdm(range(0, len(records), batch_size), desc="Generating LLM Corruptions"):
         batch = records[i:i+batch_size]
         
-        # We process the batch sequentially because openrouter api isn't batched for text generation,
-        # but the grouping allows us to simulate batched control flow if needed.
         for record in batch:
             if record.get("ethnicity_group") == "us_uk_english":
                 continue
@@ -68,20 +76,22 @@ def generate_nonlatin_corruptions(records: list[dict], client: Any, model: str, 
             max_retries = 2
             for attempt in range(max_retries + 1):
                 try:
-                    response = client.chat.completions.create(
+                    response = client.models.generate_content(
                         model=model,
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.7,
+                        contents=prompt,
+                        config=genai.types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=CorruptionsResponse,
+                            temperature=0.7,
+                        ),
                     )
-                    content = response.choices[0].message.content
-                    corruptions = _parse_response(content)
                     
-                    if not corruptions and attempt < max_retries:
-                        continue # retry on malformed
-                        
-                    for c_obj in corruptions:
-                        c_name = c_obj["variation"]
-                        c_type = c_obj["type"]
+                    if not response.parsed or not response.parsed.corruptions:
+                        raise ValueError("Failed to parse structured output")
+                    
+                    for c_obj in response.parsed.corruptions:
+                        c_name = c_obj.variation
+                        c_type = c_obj.type
                         
                         # Better naive split
                         parts = c_name.split()
