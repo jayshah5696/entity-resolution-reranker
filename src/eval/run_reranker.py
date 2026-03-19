@@ -64,7 +64,8 @@ def process_end_to_end(args):
     stage2_total_time = 0.0
     total_queries = len(queries_df)
     
-    for row in queries_df.to_dicts():
+    from tqdm import tqdm
+    for row in tqdm(queries_df.to_dicts(), desc="Evaluating Queries"):
         true_id = row.get("entity_id")
         bucket = row.get("bucket", "all")
         query_text = row.get("query_text_pipe", "")
@@ -83,7 +84,14 @@ def process_end_to_end(args):
         # 3. Stage 1: Search
         start_s1 = time.time()
         stage1_candidates = []
-        if stage1_idx is not None and s1_model is not None:
+        if args.stage1_model == "bm25" and stage1_idx is not None:
+            try:
+                # BM25 FTS LanceDB Search
+                res = stage1_idx.search(query_text, query_type="fts").limit(args.top_k_stage1).to_list()
+                stage1_candidates = res
+            except Exception as e:
+                pass
+        elif stage1_idx is not None and s1_model is not None:
             # Native dense search
             try:
                 emb = s1_model.encode([query_text], convert_to_numpy=True)[0]
@@ -92,7 +100,7 @@ def process_end_to_end(args):
             except Exception as e:
                 pass
         
-        # Fallback to dummy data for testing the pipeline
+        # Fallback to dummy data for testing the pipeline if literally no index was found
         if not stage1_candidates:
             stage1_candidates = [{"entity_id": true_id, "first_name": query_dict["first_name"], "last_name": query_dict["last_name"]}]
             

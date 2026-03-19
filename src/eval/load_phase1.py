@@ -43,5 +43,10 @@ def load_bm25_index(bm25_path: Path):
     """
     Loads the BM25 baseline index
     """
-    with open(bm25_path, "r") as f:
-        return json.load(f)
+    import lancedb
+    # Connect to the LanceDB instance used for BM25 FTS
+    db = lancedb.connect(bm25_path)
+    if "profiles" not in db.table_names():
+        return None
+    table = db.open_table("profiles")
+    return table
