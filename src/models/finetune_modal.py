@@ -12,7 +12,9 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
     "polars>=0.20.0",
     "scikit-learn>=1.3.0",
     "huggingface-hub",
-    "pyyaml"
+    "pyyaml",
+    "accelerate>=0.26.0",
+    "wandb"
 )
 
 def get_repo_name(model_key: str) -> str:
@@ -20,16 +22,16 @@ def get_repo_name(model_key: str) -> str:
 
 volume = modal.Volume.from_name("er2-ce-checkpoints", create_if_missing=True)
 
-secrets = [modal.Secret.from_name("huggingface-secret")]
+secrets = [modal.Secret.from_name("huggingface")]
 try:
     # Attempt to load wandb secret if available, else gracefully skip
-    secrets.append(modal.Secret.from_name("wandb-secret"))
+    secrets.append(modal.Secret.from_name("wandb"))
 except modal.exception.NotFoundError:
     pass
 
 @app.function(
     image=image,
-    gpu="A10G",
+    gpu="A100",
     timeout=86400, # 24 hours
     secrets=secrets,
     volumes={"/checkpoints": volume},
@@ -101,13 +103,19 @@ def finetune_one(model_key: str, resume: bool = False, dry_run: bool = False):
 
         def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
             current_epoch = self.state.epoch if self.state.epoch is not None else 0
-            loss_fct = self.bce_loss if current_epoch < 3.0 else self.lambda_loss
-            loss = loss_fct(inputs, return_outputs=return_outputs)
-            return loss
+            # SentenceTransformers v5 dynamically uses self.loss_fct within its super method.
+            # We simply overwrite the active trainer's loss_fct property before calling super.
+            self.loss_fct = self.bce_loss if current_epoch < 3.0 else self.lambda_loss
+            return super().compute_loss(model, inputs, return_outputs=return_outputs, num_items_in_batch=num_items_in_batch)
 
     # Ensure format matches what sentence-transformers expects
     def format_dataset(ds):
-        return ds.map(lambda x: {"texts": [x["text_a"], x["text_b"]], "label": float(x["label"])}, remove_columns=ds.column_names)
+        # STv5 BCE loss requires two distinct string columns + 1 label column.
+        # We drop everything else to avoid collator confusion.
+        return ds.map(
+            lambda x: {"text_a": x["text_a"], "text_b": x["text_b"], "label": float(x["label"])}, 
+            remove_columns=[c for c in ds.column_names if c not in ["text_a", "text_b", "label"]]
+        )
         
     formatted_train = format_dataset(train_dataset)
     formatted_val = format_dataset(val_dataset)
@@ -127,8 +135,8 @@ def finetune_one(model_key: str, resume: bool = False, dry_run: bool = False):
         save_total_limit=2,
         logging_steps=100,
         load_best_model_at_end=True,
-        metric_for_best_model="f1",
-        fp16=True, # A10G supports fp16 natively
+        metric_for_best_model=f"eval_{model_key}_f1",
+        fp16=True, # A100 supports fp16 natively
         seed=42,
         report_to=report_to
     )
