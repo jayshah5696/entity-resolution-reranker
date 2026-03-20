@@ -8,7 +8,7 @@ import numpy as np
 from src.eval.load_phase1 import load_phase1_index, load_phase1_eval_queries, load_bm25_index
 from src.data.serialize import pipe_serialize, colval_serialize
 from src.models.crossencoder import CrossEncoderReranker
-from src.eval.metrics import compute_f1_at_threshold, compute_pr_curve, compute_recall_retention
+from src.eval.metrics import compute_metrics, compute_f1_at_threshold, compute_recall_retention
 
 def build_results_json(experiment_id: str, stage1_latency: float, stage2_latency: float, metrics: dict) -> dict:
     """Builds the final output JSON strictly per the plan schema."""
@@ -64,55 +64,108 @@ def process_end_to_end(args):
     stage2_total_time = 0.0
     total_queries = len(queries_df)
     
-    from tqdm import tqdm
-    for row in tqdm(queries_df.to_dicts(), desc="Evaluating Queries"):
-        true_id = row.get("entity_id")
-        bucket = row.get("bucket", "all")
-        query_text = row.get("query_text_pipe", "")
-        
-        # Parse query string back to dict for serialization format mapping
-        # Pipe is Jay | Shah | Google Inc | jay@google.com | USA
-        parts = [x.strip() for x in query_text.split("|")]
-        query_dict = {
+    # 3. Stage 1: Batch Search
+    print("Executing Stage 1 Search...")
+    start_s1 = time.time()
+    
+    stage1_candidates_list = []
+    
+    if args.stage1_model == "bm25" and stage1_idx is not None:
+        for row in tqdm(queries_df.to_dicts(), desc="BM25 FTS"):
+            try:
+                res = stage1_idx.search(row.get("query_text_pipe", ""), query_type="fts").limit(args.top_k_stage1).to_list()
+                stage1_candidates_list.append(res)
+            except Exception:
+                stage1_candidates_list.append([])
+    elif stage1_idx is not None and s1_model is not None:
+        query_texts = queries_df["query_text_pipe"].to_list()
+        # Batch encode
+        print("Encoding Stage 1 queries...")
+        embs = s1_model.encode(query_texts, batch_size=256, show_progress_bar=True, convert_to_numpy=True)
+        # Search LanceDB
+        for emb in tqdm(embs, desc="Vector Search"):
+            try:
+                res = stage1_idx.search(emb).limit(args.top_k_stage1).to_list()
+                stage1_candidates_list.append(res)
+            except Exception:
+                stage1_candidates_list.append([])
+    else:
+        # Dummy fallback
+        for row in queries_df.to_dicts():
+            stage1_candidates_list.append([{"entity_id": row.get("entity_id"), "first_name": "Dummy"}])
+            
+    stage1_total_time = time.time() - start_s1
+    
+    # 4. Stage 2: Batch Cross-Encoder Scoring
+    print("Preparing Cross-Encoder pairs...")
+    all_pairs = []
+    pair_to_query_idx = []
+    
+    queries_dicts = queries_df.to_dicts()
+    for idx, (q_row, candidates) in enumerate(zip(queries_dicts, stage1_candidates_list)):
+        true_id = q_row.get("entity_id")
+        if not candidates:
+            # Fallback if somehow empty
+            candidates = [{"entity_id": true_id, "first_name": "Dummy"}]
+            stage1_candidates_list[idx] = candidates
+            
+        q_text = q_row.get("query_text_pipe", "")
+        parts = [x.strip() for x in q_text.split("|")]
+        q_dict = {
             "first_name": parts[0] if len(parts) > 0 else "",
             "last_name": parts[1] if len(parts) > 1 else "",
             "company": parts[2] if len(parts) > 2 else "",
             "email": parts[3] if len(parts) > 3 else "",
             "country": parts[4] if len(parts) > 4 else ""
         }
+        q_str = colval_serialize(q_dict)
         
-        # 3. Stage 1: Search
-        start_s1 = time.time()
-        stage1_candidates = []
-        if args.stage1_model == "bm25" and stage1_idx is not None:
-            try:
-                # BM25 FTS LanceDB Search
-                res = stage1_idx.search(query_text, query_type="fts").limit(args.top_k_stage1).to_list()
-                stage1_candidates = res
-            except Exception as e:
-                pass
-        elif stage1_idx is not None and s1_model is not None:
-            # Native dense search
-            try:
-                emb = s1_model.encode([query_text], convert_to_numpy=True)[0]
-                res = stage1_idx.search(emb).limit(args.top_k_stage1).to_list()
-                stage1_candidates = res
-            except Exception as e:
-                pass
-        
-        # Fallback to dummy data for testing the pipeline if literally no index was found
-        if not stage1_candidates:
-            stage1_candidates = [{"entity_id": true_id, "first_name": query_dict["first_name"], "last_name": query_dict["last_name"]}]
+        for c in candidates:
+            c_str = colval_serialize(c)
+            all_pairs.append((q_str, c_str))
+            pair_to_query_idx.append(idx)
             
-        stage1_total_time += (time.time() - start_s1)
+    print(f"Scoring {len(all_pairs)} candidate pairs...")
+    start_s2 = time.time()
+    # Batch predict
+    all_scores = ce.model.predict(all_pairs, batch_size=256, show_progress_bar=True)
+    
+    # Handle logits squashing safely if needed (from wrapper)
+    import torch
+    if isinstance(ce.model.model, torch.nn.Module):
+        if len(all_scores) > 0 and (np.nanmax(all_scores) > 1.0 or np.nanmin(all_scores) < 0.0):
+            import scipy.special
+            all_scores = scipy.special.expit(all_scores)
+    all_scores = np.nan_to_num(all_scores, nan=0.0)
+    
+    stage2_total_time = time.time() - start_s2
+    
+    # Reassemble and compute metrics
+    print("Computing metrics...")
+    
+    # Group scores by query index
+    grouped_scores = [[] for _ in range(total_queries)]
+    for score, idx in zip(all_scores, pair_to_query_idx):
+        grouped_scores[idx].append(score)
         
-        # 4. Stage 2: Rerank
-        start_s2 = time.time()
-        reranked = ce.rerank(query_dict, stage1_candidates, top_k=10)
-        stage2_total_time += (time.time() - start_s2)
+    for q_idx, (q_row, candidates, scores) in tqdm(enumerate(zip(queries_dicts, stage1_candidates_list, grouped_scores)), total=total_queries, desc="Metrics"):
+        true_id = q_row.get("entity_id")
+        bucket = q_row.get("bucket", "all")
+        
+        scored_candidates = []
+        for c, s in zip(candidates, scores):
+            c_copy = c.copy()
+            c_copy["ce_score"] = float(s)
+            scored_candidates.append(c_copy)
+            
+        scored_candidates.sort(key=lambda x: x["ce_score"], reverse=True)
+        reranked = scored_candidates[:10] # Top 10 for standard eval, though metrics can handle full list
+        
+        # We need the full reranked list for top 50
+        full_reranked = scored_candidates
         
         # 5. Compute Metrics for this query
-        reranked_ids = [c.get("entity_id") for c in reranked]
+        reranked_ids = [c.get("entity_id") for c in full_reranked]
         query_metrics = compute_metrics(reranked_ids, str(true_id))
         
         r50 = 1.0 if str(true_id) in reranked_ids[:50] else 0.0

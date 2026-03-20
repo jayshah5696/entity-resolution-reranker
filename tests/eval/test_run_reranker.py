@@ -11,21 +11,27 @@ def test_run_reranker_end_to_end():
         stage2_latency=45.2,
         metrics={
             "overall": {
+                "recall_at_1": 0.90,
+                "recall_at_5": 0.94,
                 "recall_at_10": 0.95,
+                "precision_at_5": 0.85,
+                "mrr_at_10": 0.88,
+                "ndcg_at_1": 0.88,
+                "ndcg_at_5": 0.90,
+                "ndcg_at_10": 0.92,
                 "recall_at_50": 0.99,
-                "mrr": 0.85,
-                "ndcg_at_10": 0.88,
                 "f1_best": 0.92,
                 "f1_threshold": 0.45,
                 "recall_retention": 0.99
             },
             "per_bucket": {
-                "exact_match": {"recall_at_10": 1.0},
+                "pristine": {"recall_at_10": 1.0},
                 "typo_name": {"recall_at_10": 0.98},
                 "missing_email": {"recall_at_10": 0.90},
                 "missing_company": {"recall_at_10": 0.85},
                 "missing_email_company": {"recall_at_10": 0.70},
-                "severe_corruption": {"recall_at_10": 0.60}
+                "swapped_attributes": {"recall_at_10": 0.60},
+                "domain_mismatch": {"recall_at_10": 0.60}
             }
         }
     )
@@ -38,7 +44,7 @@ def test_run_reranker_end_to_end():
     
     buckets = results["metrics"]["per_bucket"].keys()
     expected_buckets = {
-        "exact_match", "typo_name", "missing_email", 
-        "missing_company", "missing_email_company", "severe_corruption"
+        "pristine", "typo_name", "missing_email", 
+        "missing_company", "missing_email_company", "swapped_attributes"
     }
     assert expected_buckets.issubset(set(buckets))
