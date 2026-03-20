@@ -1,0 +1,6 @@
+{
+  "experiment_id": "002",
+  "stage1_model": "bm25",
+  "reranker": "minilm_reranker_ft",
+  "reranker_path": "jayshah5696/er2-ce-minilm-reranker-ft"
+}

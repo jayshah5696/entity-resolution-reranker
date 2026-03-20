@@ -1,0 +1,6 @@
+{
+  "experiment_id": "007",
+  "stage1_model": "bm25",
+  "reranker": "granite_reranker",
+  "reranker_path": "ibm-granite/granite-embedding-reranker-english-r2"
+}

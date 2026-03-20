@@ -1,0 +1,6 @@
+{
+  "experiment_id": "006",
+  "stage1_model": "bm25",
+  "reranker": "gte_reranker_ft",
+  "reranker_path": "jayshah5696/er2-ce-gte-reranker-ft"
+}

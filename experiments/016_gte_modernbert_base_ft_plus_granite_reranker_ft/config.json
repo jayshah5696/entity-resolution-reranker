@@ -1,0 +1,6 @@
+{
+  "experiment_id": "016",
+  "stage1_model": "gte_modernbert_base_ft",
+  "reranker": "granite_reranker_ft",
+  "reranker_path": "jayshah5696/er2-ce-granite-reranker-ft"
+}

@@ -1,0 +1,6 @@
+{
+  "experiment_id": "004",
+  "stage1_model": "bm25",
+  "reranker": "bge_reranker_m3_ft",
+  "reranker_path": "jayshah5696/er2-ce-bge-reranker-m3-ft"
+}

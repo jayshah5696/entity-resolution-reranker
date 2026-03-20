@@ -1,0 +1,6 @@
+{
+  "experiment_id": "011",
+  "stage1_model": "gte_modernbert_base_ft",
+  "reranker": "bge_reranker_m3",
+  "reranker_path": "BAAI/bge-reranker-v2-m3"
+}

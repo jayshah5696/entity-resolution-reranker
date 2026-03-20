@@ -1,0 +1,6 @@
+{
+  "experiment_id": "009",
+  "stage1_model": "gte_modernbert_base_ft",
+  "reranker": "minilm_reranker",
+  "reranker_path": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+}

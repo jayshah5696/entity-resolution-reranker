@@ -1,0 +1,6 @@
+{
+  "experiment_id": "008",
+  "stage1_model": "bm25",
+  "reranker": "granite_reranker_ft",
+  "reranker_path": "jayshah5696/er2-ce-granite-reranker-ft"
+}

@@ -1,5 +1,0 @@
-{
-  "experiment_id": "001",
-  "stage1_model": "bm25",
-  "reranker": "minilm_reranker"
-}

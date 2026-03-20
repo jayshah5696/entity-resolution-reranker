@@ -1,0 +1,6 @@
+{
+  "experiment_id": "003",
+  "stage1_model": "bm25",
+  "reranker": "bge_reranker_m3",
+  "reranker_path": "BAAI/bge-reranker-v2-m3"
+}
