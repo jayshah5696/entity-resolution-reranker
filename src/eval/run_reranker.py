@@ -65,36 +65,48 @@ def process_end_to_end(args):
     stage2_total_time = 0.0
     total_queries = len(queries_df)
     
-    # 3. Stage 1: Batch Search
+        # 3. Stage 1: Batch Search
     print("Executing Stage 1 Search...")
     start_s1 = time.time()
     
     stage1_candidates_list = []
     
-    if args.stage1_model == "bm25" and stage1_idx is not None:
-        for row in tqdm(queries_df.to_dicts(), desc="BM25 FTS"):
-            try:
-                res = stage1_idx.search(row.get("query_text_pipe", ""), query_type="fts").limit(args.top_k_stage1).to_list()
-                stage1_candidates_list.append(res)
-            except Exception:
-                stage1_candidates_list.append([])
-    elif stage1_idx is not None and s1_model is not None:
-        query_texts = queries_df["query_text_pipe"].to_list()
-        # Batch encode
-        print("Encoding Stage 1 queries...")
-        embs = s1_model.encode(query_texts, batch_size=256, show_progress_bar=True, convert_to_numpy=True)
-        # Search LanceDB
-        for emb in tqdm(embs, desc="Vector Search"):
-            try:
-                res = stage1_idx.search(emb).limit(args.top_k_stage1).to_list()
-                stage1_candidates_list.append(res)
-            except Exception:
+    if hasattr(args, "precomputed_candidates") and args.precomputed_candidates and args.precomputed_candidates.exists():
+        print(f"Loading precomputed Stage 1 candidates from {args.precomputed_candidates}...")
+        cand_df = pl.read_parquet(args.precomputed_candidates)
+        # Assuming candidates_json exists and is sorted matching queries_df (we will join by query_id to be safe)
+        joined = queries_df.join(cand_df, on="query_id", how="left")
+        import json as builtin_json
+        for j_str in joined["candidates_json"].to_list():
+            if j_str:
+                stage1_candidates_list.append(builtin_json.loads(j_str))
+            else:
                 stage1_candidates_list.append([])
     else:
-        # Dummy fallback
-        for row in queries_df.to_dicts():
-            stage1_candidates_list.append([{"entity_id": row.get("entity_id"), "first_name": "Dummy"}])
-            
+        if args.stage1_model == "bm25" and stage1_idx is not None:
+            for row in tqdm(queries_df.to_dicts(), desc="BM25 FTS"):
+                try:
+                    res = stage1_idx.search(row.get("query_text_pipe", ""), query_type="fts").limit(args.top_k_stage1).to_list()
+                    stage1_candidates_list.append(res)
+                except Exception:
+                    stage1_candidates_list.append([])
+        elif stage1_idx is not None and s1_model is not None:
+            query_texts = queries_df["query_text_pipe"].to_list()
+            # Batch encode
+            print("Encoding Stage 1 queries...")
+            embs = s1_model.encode(query_texts, batch_size=256, show_progress_bar=True, convert_to_numpy=True)
+            # Search LanceDB
+            for emb in tqdm(embs, desc="Vector Search"):
+                try:
+                    res = stage1_idx.search(emb).limit(args.top_k_stage1).to_list()
+                    stage1_candidates_list.append(res)
+                except Exception:
+                    stage1_candidates_list.append([])
+        else:
+            # Dummy fallback
+            for row in queries_df.to_dicts():
+                stage1_candidates_list.append([{"entity_id": row.get("entity_id"), "first_name": "Dummy"}])
+                
     stage1_total_time = time.time() - start_s1
     
     # 4. Stage 2: Batch Cross-Encoder Scoring

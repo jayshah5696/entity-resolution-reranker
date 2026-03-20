@@ -54,8 +54,10 @@ def run_single_experiment(exp_cfg: dict):
     
     if s1_model == "bm25":
         s1_index = Path("/data/indexes/bm25_pipe/index.lance")
+        s1_candidates = Path("/data/candidates/bm25_candidates.parquet")
     else:
         s1_index = Path("/data/indexes/gte_modernbert_base_pipe_fp32/index.lance")
+        s1_candidates = Path("/data/candidates/dense_candidates.parquet")
         
     output_json = Path(f"/data/results/{exp_id}_{s1_model}_plus_{s2_key}.json")
     output_json.parent.mkdir(parents=True, exist_ok=True)
@@ -72,7 +74,8 @@ def run_single_experiment(exp_cfg: dict):
         eval_queries=eval_queries,
         top_k_stage1=50,
         output=output_json,
-        experiment_id=exp_id
+        experiment_id=exp_id,
+        precomputed_candidates=s1_candidates
     )
     
     # We must patch models_cfg loading since run_reranker reads configs/models.yaml locally
@@ -103,13 +106,20 @@ def launch_evals():
         with open(f) as fp:
             configs.append(json.load(fp))
             
-    print(f"Found {len(configs)} evaluations. Dispatching to Modal A100s...")
+    # To avoid hitting Modal's A100 concurrency limit (typically 10 max), we batch the requests into chunks of 8.
+    print(f"Found {len(configs)} evaluations. Dispatching to Modal A100s in batches of 8 to respect concurrency limits...")
     
-    # Run in parallel!
-    results = list(run_single_experiment.starmap(
-        [(c,) for c in configs],
-        return_exceptions=True
-    ))
+    results = []
+    chunk_size = 8
+    for i in range(0, len(configs), chunk_size):
+        batch_configs = configs[i:i + chunk_size]
+        print(f"\n--- Launching Batch {i//chunk_size + 1} (Exps {[c['experiment_id'] for c in batch_configs]}) ---")
+        
+        batch_results = list(run_single_experiment.starmap(
+            [(c,) for c in batch_configs],
+            return_exceptions=True
+        ))
+        results.extend(batch_results)
     
     # Sync results back to local disk
     print("Downloading results from Volume...")
