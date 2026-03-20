@@ -1,8 +1,8 @@
 {
   "experiment_id": "001",
   "latency": {
-    "stage1_ms": 0.00095367431640625,
-    "stage2_ms": 225.96406936645508
+    "stage1_ms": 0.0007197911076644341,
+    "stage2_ms": 6.242064494233063
   },
   "metrics": {
     "overall": {
@@ -15,7 +15,22 @@
       "f1_threshold": 0.01
     },
     "per_bucket": {
-      "exact_match": {
+      "typo_name": {
+        "recall_at_10": 1.0
+      },
+      "swapped_attributes": {
+        "recall_at_10": 1.0
+      },
+      "missing_email_company": {
+        "recall_at_10": 1.0
+      },
+      "domain_mismatch": {
+        "recall_at_10": 1.0
+      },
+      "pristine": {
+        "recall_at_10": 1.0
+      },
+      "missing_firstname": {
         "recall_at_10": 1.0
       }
     }

@@ -112,23 +112,22 @@ def process_end_to_end(args):
         stage2_total_time += (time.time() - start_s2)
         
         # 5. Compute Metrics for this query
-        rank_positions = [i for i, c in enumerate(reranked) if c.get("entity_id") == true_id]
-        rank = rank_positions[0] + 1 if rank_positions else 0
+        reranked_ids = [c.get("entity_id") for c in reranked]
+        query_metrics = compute_metrics(reranked_ids, str(true_id))
         
-        r10 = 1.0 if 0 < rank <= 10 else 0.0
-        r50 = 1.0 if 0 < rank <= 50 else 0.0
-        mrr = 1.0 / rank if rank > 0 else 0.0
-        ndcg10 = 1.0 / np.log2(rank + 1) if 0 < rank <= 10 else 0.0
-        
+        r50 = 1.0 if str(true_id) in reranked_ids[:50] else 0.0
         retention = compute_recall_retention(stage1_candidates, reranked, str(true_id))
         
-        results["overall"]["recall_at_10"].append(r10)
-        results["overall"]["recall_at_50"].append(r50)
-        results["overall"]["mrr"].append(mrr)
-        results["overall"]["ndcg_at_10"].append(ndcg10)
-        results["overall"]["recall_retention"].append(retention)
+        # Accumulate metrics
+        for k, v in query_metrics.items():
+            results["overall"].setdefault(k, []).append(v)
+            results["per_bucket"][bucket].setdefault(k, []).append(v)
+            
+        results["overall"].setdefault("recall_at_50", []).append(r50)
+        results["overall"].setdefault("recall_retention", []).append(retention)
         
-        results["per_bucket"][bucket]["recall_at_10"].append(r10)
+        results["per_bucket"][bucket].setdefault("recall_at_50", []).append(r50)
+        results["per_bucket"][bucket].setdefault("recall_retention", []).append(retention)
         
         # Track raw scores for F1 calibration
         for c in reranked:
@@ -136,21 +135,16 @@ def process_end_to_end(args):
             results["overall"]["labels"].append(1 if c.get("entity_id") == true_id else 0)
             
     # Aggregate
-    final_metrics = {
-        "overall": {
-            "recall_at_10": float(np.mean(results["overall"]["recall_at_10"])) if results["overall"]["recall_at_10"] else 0.0,
-            "recall_at_50": float(np.mean(results["overall"]["recall_at_50"])) if results["overall"]["recall_at_50"] else 0.0,
-            "mrr": float(np.mean(results["overall"]["mrr"])) if results["overall"]["mrr"] else 0.0,
-            "ndcg_at_10": float(np.mean(results["overall"]["ndcg_at_10"])) if results["overall"]["ndcg_at_10"] else 0.0,
-            "recall_retention": float(np.mean(results["overall"]["recall_retention"])) if results["overall"]["recall_retention"] else 0.0,
-        },
-        "per_bucket": {}
-    }
+    final_metrics = {"overall": {}, "per_bucket": {}}
     
+    # Base overall keys
+    for k, v_list in results["overall"].items():
+        if k not in ["scores", "labels"]:
+            final_metrics["overall"][k] = float(np.mean(v_list)) if v_list else 0.0
+            
     scores = np.array(results["overall"]["scores"])
     labels = np.array(results["overall"]["labels"])
     if len(scores) > 0:
-        # Simple thresholding logic using the previously tested functions
         best_f1, best_t = 0.0, 0.5
         thresholds = np.linspace(0.01, 0.99, 50)
         for t in thresholds:
@@ -166,8 +160,10 @@ def process_end_to_end(args):
         final_metrics["overall"]["f1_threshold"] = 0.5
         
     for b in buckets:
-        vals = results["per_bucket"][b]["recall_at_10"]
-        final_metrics["per_bucket"][b] = {"recall_at_10": float(np.mean(vals)) if vals else 0.0}
+        final_metrics["per_bucket"][b] = {}
+        for k, v_list in results["per_bucket"][b].items():
+            if k not in ["scores", "labels"]:
+                final_metrics["per_bucket"][b][k] = float(np.mean(v_list)) if v_list else 0.0
         
     # Calculate Latency per query in ms
     s1_ms = (stage1_total_time / total_queries) * 1000 if total_queries > 0 else 0.0

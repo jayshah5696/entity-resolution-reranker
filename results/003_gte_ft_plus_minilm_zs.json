@@ -1,22 +1,37 @@
 {
   "experiment_id": "003",
   "latency": {
-    "stage1_ms": 0.00095367431640625,
-    "stage2_ms": 113.40594291687012
+    "stage1_ms": 40.40604165554407,
+    "stage2_ms": 37.392241717803905
   },
   "metrics": {
     "overall": {
-      "recall_at_10": 1.0,
-      "recall_at_50": 1.0,
-      "mrr": 1.0,
-      "ndcg_at_10": 1.0,
-      "recall_retention": 1.0,
-      "f1_best": 1.0,
-      "f1_threshold": 0.01
+      "recall_at_10": 0.9116109302554997,
+      "recall_at_50": 0.9116109302554997,
+      "mrr": 0.8436132132639976,
+      "ndcg_at_10": 0.8600764602275339,
+      "recall_retention": 0.9116109302554997,
+      "f1_best": 0.0,
+      "f1_threshold": 0.5
     },
     "per_bucket": {
-      "exact_match": {
-        "recall_at_10": 1.0
+      "missing_firstname": {
+        "recall_at_10": 0.9245338857650193
+      },
+      "pristine": {
+        "recall_at_10": 0.9639932919009568
+      },
+      "typo_name": {
+        "recall_at_10": 0.9550162770050311
+      },
+      "swapped_attributes": {
+        "recall_at_10": 0.9530433066982342
+      },
+      "missing_email_company": {
+        "recall_at_10": 0.7101706619315379
+      },
+      "domain_mismatch": {
+        "recall_at_10": 0.9629081582322186
       }
     }
   }
