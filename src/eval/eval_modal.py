@@ -7,23 +7,28 @@ app = modal.App("er-modal-evals")
 vol = modal.Volume.from_name("er-indexes-vol")
 
 # Heavy image mapping matching finetuning script exactly
-image = modal.Image.debian_slim(python_version="3.11").pip_install(
-    "torch==2.6.0",
-    "transformers==4.49.0", 
-    "sentence-transformers==5.0.0",
-    "polars>=0.20.0",
-    "scikit-learn>=1.3.0",
-    "lancedb>=0.15.0",
-    "pyyaml",
-    "pyarrow",
-    "huggingface-hub",
-    "tqdm"
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install(
+        "torch==2.6.0",
+        "transformers==4.49.0", 
+        "sentence-transformers==5.0.0",
+        "polars>=0.20.0",
+        "scikit-learn>=1.3.0",
+        "lancedb>=0.15.0",
+        "pyyaml",
+        "pyarrow",
+        "huggingface-hub",
+        "tqdm"
+    )
+    .add_local_dir("src", remote_path="/root/workspace/src")
+    .add_local_dir("configs", remote_path="/root/workspace/configs")
 )
 
 @app.function(
     image=image,
-    gpu="A100", # Must use A100 to map massive tensor scores
-    timeout=7200, # 2 hours max per node
+    gpu="A100", 
+    timeout=7200, 
     volumes={"/data": vol},
     secrets=[modal.Secret.from_name("huggingface")]
 )
@@ -32,8 +37,6 @@ def run_single_experiment(exp_cfg: dict):
     import os
     import sys
     
-    # Mount the local src module logic into the container path dynamically.
-    # Actually, we can just map the `run_reranker.py` logic directly to avoid module path dependencies natively.
     sys.path.append("/root/workspace")
     
     os.environ["HF_HUB_DISABLE_XET"] = "1"
@@ -114,14 +117,16 @@ def launch_evals():
     
     # Because we want to read from the Volume directly without writing another cloud function,
     # we can iterate the volume data
-    for entry in vol.listdir("/results"):
-        if entry.path.endswith(".json"):
-            # read and write
-            data = b""
-            for chunk in vol.read_file(entry.path):
-                data += chunk
-            with open(f"results/{Path(entry.path).name}", "wb") as f:
-                f.write(data)
+    try:
+        for entry in vol.listdir("/results"):
+            if entry.path.endswith(".json"):
+                data = b""
+                for chunk in vol.read_file(entry.path):
+                    data += chunk
+                with open(f"results/{Path(entry.path).name}", "wb") as f:
+                    f.write(data)
+    except modal.exception.NotFoundError:
+        print("No /results directory found in volume. Experiments may have failed entirely.")
                 
     print("Executions finished:")
     for c, r in zip(configs, results):
