@@ -4,6 +4,7 @@ import json
 import time
 import polars as pl
 import numpy as np
+from tqdm import tqdm
 
 from src.eval.load_phase1 import load_phase1_index, load_phase1_eval_queries, load_bm25_index
 from src.data.serialize import pipe_serialize, colval_serialize
