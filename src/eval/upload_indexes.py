@@ -21,9 +21,9 @@ def upload():
         with vol.batch_upload(force=True) as batch:
             batch.put_directory(local_bm25, "/indexes/bm25_pipe")
             
-    print("Uploading Dense index (this may take a few minutes for 3GB)...")
-    if local_dense.exists():
-        with vol.batch_upload(force=True) as batch:
-            batch.put_directory(local_dense, "/indexes/gte_modernbert_base_pipe_fp32")
+    # print("Uploading Dense index (this may take a few minutes for 3GB)...")
+    # if local_dense.exists():
+    #     with vol.batch_upload(force=True) as batch:
+    #         batch.put_directory(local_dense, "/indexes/gte_modernbert_base_pipe_fp32")
             
     print("All required data synced to Modal Volume: 'er-indexes-vol'")

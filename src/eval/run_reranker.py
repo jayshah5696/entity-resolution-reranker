@@ -143,12 +143,9 @@ def process_end_to_end(args):
     # Batch predict
     all_scores = ce.model.predict(all_pairs, batch_size=256, show_progress_bar=True)
     
-    # Handle logits squashing safely if needed (from wrapper)
-    import torch
-    if isinstance(ce.model.model, torch.nn.Module):
-        if len(all_scores) > 0 and (np.nanmax(all_scores) > 1.0 or np.nanmin(all_scores) < 0.0):
-            import scipy.special
-            all_scores = scipy.special.expit(all_scores)
+    # Always forcefully squash to probabilities for clean thresholding across all model types (Base vs FT)
+    import scipy.special
+    all_scores = scipy.special.expit(all_scores)
     all_scores = np.nan_to_num(all_scores, nan=0.0)
     
     stage2_total_time = time.time() - start_s2
@@ -180,9 +177,9 @@ def process_end_to_end(args):
         # 5. Compute Metrics for this query
         reranked_ids = [c.get("entity_id") for c in full_reranked]
         query_metrics = compute_metrics(reranked_ids, str(true_id))
-        
+
         r50 = 1.0 if str(true_id) in reranked_ids[:50] else 0.0
-        retention = compute_recall_retention(stage1_candidates, reranked, str(true_id))
+        retention = compute_recall_retention(candidates, full_reranked, str(true_id))
         
         # Accumulate metrics
         for k, v in query_metrics.items():
@@ -196,9 +193,9 @@ def process_end_to_end(args):
         results["per_bucket"][bucket].setdefault("recall_retention", []).append(retention)
         
         # Track raw scores for F1 calibration
-        for c in reranked:
+        for c in full_reranked:
             results["overall"]["scores"].append(c.get("ce_score", 0.0))
-            results["overall"]["labels"].append(1 if c.get("entity_id") == true_id else 0)
+            results["overall"]["labels"].append(1 if str(c.get("entity_id")) == str(true_id) else 0)
             
     # Aggregate
     final_metrics = {"overall": {}, "per_bucket": {}}
@@ -211,8 +208,12 @@ def process_end_to_end(args):
     scores = np.array(results["overall"]["scores"])
     labels = np.array(results["overall"]["labels"])
     if len(scores) > 0:
-        best_f1, best_t = 0.0, 0.5
-        thresholds = np.linspace(0.01, 0.99, 50)
+        best_f1, best_t = 0.0, float(np.median(scores))
+        
+        # Dynamically sweep the actual distribution of logits/probabilities rather than a fixed grid
+        # This fixes F1 dropping to 0.0 for uncalibrated zero-shot models that output logits entirely < 0 or > 1
+        thresholds = np.percentile(scores, np.linspace(1, 99, 50))
+        
         for t in thresholds:
             f1 = compute_f1_at_threshold(scores, labels, t)
             if f1 > best_f1:

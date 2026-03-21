@@ -1,0 +1,98 @@
+{
+  "experiment_id": "011",
+  "latency": {
+    "stage1_ms": 0.06009478620930765,
+    "stage2_ms": 58.03685375509782
+  },
+  "metrics": {
+    "overall": {
+      "recall_at_10": 0.0,
+      "recall_at_50": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_10": 0.0,
+      "recall_retention": 0.0,
+      "recall_at_1": 0.0,
+      "ndcg_at_1": 0.0,
+      "recall_at_5": 0.0,
+      "ndcg_at_5": 0.0,
+      "precision_at_5": 0.0,
+      "mrr_at_10": 0.0,
+      "f1_best": 0.0,
+      "f1_threshold": 0.5032888948917389
+    },
+    "per_bucket": {
+      "typo_name": {
+        "recall_at_10": 0.0,
+        "recall_at_1": 0.0,
+        "ndcg_at_1": 0.0,
+        "recall_at_5": 0.0,
+        "ndcg_at_5": 0.0,
+        "ndcg_at_10": 0.0,
+        "precision_at_5": 0.0,
+        "mrr_at_10": 0.0,
+        "recall_at_50": 0.0,
+        "recall_retention": 0.0
+      },
+      "swapped_attributes": {
+        "recall_at_10": 0.0,
+        "recall_at_1": 0.0,
+        "ndcg_at_1": 0.0,
+        "recall_at_5": 0.0,
+        "ndcg_at_5": 0.0,
+        "ndcg_at_10": 0.0,
+        "precision_at_5": 0.0,
+        "mrr_at_10": 0.0,
+        "recall_at_50": 0.0,
+        "recall_retention": 0.0
+      },
+      "domain_mismatch": {
+        "recall_at_10": 0.0,
+        "recall_at_1": 0.0,
+        "ndcg_at_1": 0.0,
+        "recall_at_5": 0.0,
+        "ndcg_at_5": 0.0,
+        "ndcg_at_10": 0.0,
+        "precision_at_5": 0.0,
+        "mrr_at_10": 0.0,
+        "recall_at_50": 0.0,
+        "recall_retention": 0.0
+      },
+      "missing_email_company": {
+        "recall_at_10": 0.0,
+        "recall_at_1": 0.0,
+        "ndcg_at_1": 0.0,
+        "recall_at_5": 0.0,
+        "ndcg_at_5": 0.0,
+        "ndcg_at_10": 0.0,
+        "precision_at_5": 0.0,
+        "mrr_at_10": 0.0,
+        "recall_at_50": 0.0,
+        "recall_retention": 0.0
+      },
+      "pristine": {
+        "recall_at_10": 0.0,
+        "recall_at_1": 0.0,
+        "ndcg_at_1": 0.0,
+        "recall_at_5": 0.0,
+        "ndcg_at_5": 0.0,
+        "ndcg_at_10": 0.0,
+        "precision_at_5": 0.0,
+        "mrr_at_10": 0.0,
+        "recall_at_50": 0.0,
+        "recall_retention": 0.0
+      },
+      "missing_firstname": {
+        "recall_at_10": 0.0,
+        "recall_at_1": 0.0,
+        "ndcg_at_1": 0.0,
+        "recall_at_5": 0.0,
+        "ndcg_at_5": 0.0,
+        "ndcg_at_10": 0.0,
+        "precision_at_5": 0.0,
+        "mrr_at_10": 0.0,
+        "recall_at_50": 0.0,
+        "recall_retention": 0.0
+      }
+    }
+  }
+}
