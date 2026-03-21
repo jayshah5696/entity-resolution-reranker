@@ -116,11 +116,11 @@ def compute_dense_candidates():
 
 @app.local_entrypoint()
 def run_precomputes():
-    print("Dispatching BM25 Stage 1 to CPU worker...")
-    bm25_task = compute_bm25_candidates.spawn()
+    # print("Dispatching BM25 Stage 1 to CPU worker...")
+    # bm25_task = compute_bm25_candidates.spawn()
     print("Dispatching Dense Stage 1 to A10G worker...")
     dense_task = compute_dense_candidates.spawn()
     
-    bm25_task.get()
+    # bm25_task.get()
     dense_task.get()
-    print("All Stage 1 Candidates safely cached to Volume!")
+    print("Dense Stage 1 Candidates safely cached to Volume!")
