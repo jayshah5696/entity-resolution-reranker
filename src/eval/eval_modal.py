@@ -27,7 +27,7 @@ image = (
 
 @app.function(
     image=image,
-    gpu="A100", 
+    gpu="A10G", 
     timeout=7200, 
     volumes={"/data": vol},
     secrets=[modal.Secret.from_name("huggingface")]
@@ -50,20 +50,19 @@ def run_single_experiment(exp_cfg: dict):
     print(f"Stage 1: {s1_model} | Stage 2: {s2_path}")
     
     # Path mappings inside volume
-    eval_queries = Path("/data/eval_data")
+    eval_queries = Path("/data/eval_data/eval_queries.parquet")
     
     if s1_model == "bm25":
-        s1_index = Path("/data/indexes/bm25_pipe/index.lance")
+        s1_index = Path("/data/indexes/bm25_pipe")
         s1_candidates = Path("/data/candidates/bm25_candidates.parquet")
     else:
-        s1_index = Path("/data/indexes/gte_modernbert_base_pipe_fp32/index.lance")
+        s1_index = Path("/data/indexes/gte_modernbert_base_pipe_fp32")
         s1_candidates = Path("/data/candidates/dense_candidates.parquet")
         
     output_json = Path(f"/data/results/{exp_id}_{s1_model}_plus_{s2_key}.json")
     output_json.parent.mkdir(parents=True, exist_ok=True)
     
     # The simplest way to run this is to actually invoke our local run_reranker logic identically!
-    # Because we need `src` available inside modal to import, we will mount it locally!
     from src.eval.run_reranker import process_end_to_end
     from argparse import Namespace
     
@@ -71,7 +70,7 @@ def run_single_experiment(exp_cfg: dict):
         stage1_model=s1_model,
         stage1_index=s1_index,
         reranker=s2_key,
-        eval_queries=eval_queries,
+        eval_queries=eval_queries.parent, # Just pass directory wrapper locally
         top_k_stage1=50,
         output=output_json,
         experiment_id=exp_id,
@@ -79,7 +78,6 @@ def run_single_experiment(exp_cfg: dict):
     )
     
     # We must patch models_cfg loading since run_reranker reads configs/models.yaml locally
-    # We can inject a mock or copy the dict directly
     import yaml
     cfg_dir = Path("/root/workspace/configs")
     cfg_dir.mkdir(parents=True, exist_ok=True)
@@ -90,6 +88,16 @@ def run_single_experiment(exp_cfg: dict):
         
     os.chdir("/root/workspace")
     process_end_to_end(args)
+    
+    # Read the output JSON dynamically and print it so it lives securely in the standard output logs
+    import json as builtin_json
+    with open(output_json) as f:
+        metrics_data = builtin_json.load(f)
+        print("\n" + "="*50)
+        print(f"FINAL METRICS FOR {exp_id}")
+        print("="*50)
+        print(builtin_json.dumps(metrics_data.get('metrics', {}).get('overall', {}), indent=2))
+        print("="*50 + "\n")
     
     vol.commit() # Save results to volume
     print(f"=== Completed Experiment {exp_id} ===")
@@ -102,12 +110,12 @@ def launch_evals():
     
     # Read configs locally
     configs = []
+    # Fetch all experiments
     for f in sorted(Path("experiments").glob("*/config.json")):
         with open(f) as fp:
             configs.append(json.load(fp))
             
-    # To avoid hitting Modal's A100 concurrency limit (typically 10 max), we batch the requests into chunks of 8.
-    print(f"Found {len(configs)} evaluations. Dispatching to Modal A100s in batches of 8 to respect concurrency limits...")
+    print(f"Found {len(configs)} evaluations. Dispatching to Modal A10Gs in batches of 8...")
     
     results = []
     chunk_size = 8
