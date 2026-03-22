@@ -198,7 +198,7 @@ def process_end_to_end(args):
     stage2_total_time = time.time() - start_s2
 
     # Reassemble and compute metrics
-    print("Computing metrics...")
+    print("Computing metrics...", flush=True)
 
     # Group scores by query index
     grouped_scores = [[] for _ in range(total_queries)]
@@ -220,14 +220,11 @@ def process_end_to_end(args):
             scored_candidates.append(c_copy)
 
         scored_candidates.sort(key=lambda x: x["ce_score"], reverse=True)
-        reranked = scored_candidates[
-            :10
-        ]  # Top 10 for standard eval, though metrics can handle full list
 
-        # We need the full reranked list for top 50
+        # Full reranked list for metrics
         full_reranked = scored_candidates
 
-        # 5. Compute Metrics for this query
+        # Compute Metrics for this query
         reranked_ids = [c.get("entity_id") for c in full_reranked]
         query_metrics = compute_metrics(reranked_ids, str(true_id))
 
@@ -255,6 +252,7 @@ def process_end_to_end(args):
             )
 
     # Aggregate
+    print("Aggregating...", flush=True)
     final_metrics = {"overall": {}, "per_bucket": {}}
 
     # Base overall keys
@@ -267,8 +265,6 @@ def process_end_to_end(args):
     if len(scores) > 0:
         best_f1, best_t = 0.0, float(np.median(scores))
 
-        # Dynamically sweep the actual distribution of logits/probabilities rather than a fixed grid
-        # This fixes F1 dropping to 0.0 for uncalibrated zero-shot models that output logits entirely < 0 or > 1
         thresholds = np.percentile(scores, np.linspace(1, 99, 50))
 
         for t in thresholds:

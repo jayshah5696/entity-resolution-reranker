@@ -103,10 +103,11 @@ def main() -> None:
         with open(f) as fp:
             configs.append(json.load(fp))
 
-    # Allow filtering by experiment IDs via CLI args
+    # Allow filtering by experiment IDs via CLI args (preserves CLI order)
     if len(sys.argv) > 1:
-        requested = set(sys.argv[1:])
-        configs = [c for c in configs if c["experiment_id"] in requested]
+        requested = sys.argv[1:]
+        id_to_cfg = {c["experiment_id"]: c for c in configs}
+        configs = [id_to_cfg[eid] for eid in requested if eid in id_to_cfg]
 
     if not configs:
         print("No experiments to run.")
