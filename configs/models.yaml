@@ -1,9 +1,5 @@
 bge_reranker_m3:
-  context: 8192
-  fine_tuned: false
   hf_id: BAAI/bge-reranker-v2-m3
-  license: mit
-  params: 567M
 granite_reranker:
   context: 8192
   fine_tuned: false
@@ -17,4 +13,8 @@ gte_reranker:
   license: mit
   params: 149M
 minilm_reranker:
+  context: 512
+  fine_tuned: false
   hf_id: cross-encoder/ms-marco-MiniLM-L-6-v2
+  license: apache-2.0
+  params: 22M

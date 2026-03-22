@@ -193,7 +193,7 @@ def process_end_to_end(args):
     # Use the wrapper's predict() which conditionally applies sigmoid only
     # for models that output raw logits (e.g. MiniLM).  Models that already
     # return probabilities (GTE, BGE, Granite) are left untouched.
-    all_scores = ce.predict(all_pairs, batch_size=256, show_progress_bar=True)
+    all_scores = ce.predict(all_pairs, batch_size=512, show_progress_bar=True)
 
     stage2_total_time = time.time() - start_s2
 
