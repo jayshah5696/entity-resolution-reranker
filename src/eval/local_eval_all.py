@@ -87,7 +87,9 @@ def run_experiment(exp_cfg: dict) -> None:
             f"R@10={overall.get('recall_at_10', 0):.3f}  "
             f"R@50={overall.get('recall_at_50', 0):.3f}  "
             f"MRR@10={overall.get('mrr_at_10', 0):.3f}  "
-            f"F1={overall.get('f1_best', 0):.3f}"
+            f"F1={overall.get('f1_best', 0):.3f}  "
+            f"AvgRank={overall.get('mean_reranked_rank', 0):.1f}  "
+            f"RankDelta={overall.get('mean_rank_delta', 0):+.1f}"
         )
 
     finally:

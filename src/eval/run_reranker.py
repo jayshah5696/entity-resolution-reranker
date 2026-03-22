@@ -231,6 +231,21 @@ def process_end_to_end(args):
         r50 = 1.0 if str(true_id) in reranked_ids[:50] else 0.0
         retention = compute_recall_retention(candidates, full_reranked, str(true_id))
 
+        # Mean rank of true match after reranking (1-indexed, 51 if not found)
+        try:
+            reranked_rank = reranked_ids.index(str(true_id)) + 1
+        except ValueError:
+            reranked_rank = len(reranked_ids) + 1
+
+        # Stage 1 rank before reranking
+        stage1_ids = [str(c.get("entity_id", "")) for c in candidates]
+        try:
+            stage1_rank = stage1_ids.index(str(true_id)) + 1
+        except ValueError:
+            stage1_rank = len(stage1_ids) + 1
+
+        rank_delta = stage1_rank - reranked_rank  # positive = reranker helped
+
         # Accumulate metrics
         for k, v in query_metrics.items():
             results["overall"].setdefault(k, []).append(v)
@@ -238,10 +253,19 @@ def process_end_to_end(args):
 
         results["overall"].setdefault("recall_at_50", []).append(r50)
         results["overall"].setdefault("recall_retention", []).append(retention)
+        results["overall"].setdefault("mean_reranked_rank", []).append(reranked_rank)
+        results["overall"].setdefault("mean_stage1_rank", []).append(stage1_rank)
+        results["overall"].setdefault("mean_rank_delta", []).append(rank_delta)
 
         results["per_bucket"][bucket].setdefault("recall_at_50", []).append(r50)
         results["per_bucket"][bucket].setdefault("recall_retention", []).append(
             retention
+        )
+        results["per_bucket"][bucket].setdefault("mean_reranked_rank", []).append(
+            reranked_rank
+        )
+        results["per_bucket"][bucket].setdefault("mean_rank_delta", []).append(
+            rank_delta
         )
 
         # Track raw scores for F1 calibration
