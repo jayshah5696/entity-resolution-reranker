@@ -1,10 +1,12 @@
 import argparse
+import sys
 from pathlib import Path
 import json
 import time
 import polars as pl
 import numpy as np
 from tqdm import tqdm
+from loguru import logger
 
 from src.eval.load_phase1 import (
     load_phase1_index,
@@ -17,6 +19,14 @@ from src.eval.metrics import (
     compute_metrics,
     compute_f1_at_threshold,
     compute_recall_retention,
+)
+
+# Configure loguru: remove default, add stderr with timestamps
+logger.remove()
+logger.add(
+    sys.stderr,
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <7}</level> | {message}",
+    level="INFO",
 )
 
 
@@ -32,34 +42,30 @@ def build_results_json(
 
 
 def process_end_to_end(args):
-    print(f"Running Experiment {args.experiment_id}...")
+    t_exp_start = time.time()
+    logger.info("Experiment {} starting", args.experiment_id)
 
     # 1. Load Phase 1
     if args.stage1_model == "bm25":
-        # BM25 baseline route. For now, since the actual index format isn't available, we just mock the search locally
-        # in the real execution, this would parse a LanceDB FTS index or similar
-        print("Loading BM25 index...")
+        logger.info("Loading BM25 index...")
         stage1_idx = (
             load_bm25_index(args.stage1_index) if args.stage1_index.exists() else None
         )
         s1_model = None
     else:
-        print("Loading LanceDB dense index...")
+        logger.info("Loading LanceDB dense index...")
         try:
             stage1_idx, s1_model = load_phase1_index(
                 args.stage1_index, args.stage1_model
             )
         except Exception as e:
-            print(
-                f"Skipping proper search due to missing FTS index dependencies/files: {e}"
-            )
+            logger.warning("Skipping live index search: {}", e)
             stage1_idx, s1_model = None, None
 
-    print("Loading queries...")
+    logger.info("Loading queries...")
     queries_df = load_phase1_eval_queries(args.eval_queries)
 
-    print("Loading reranker...")
-    # Map the arg to standard yaml loading
+    logger.info("Loading reranker...")
     import yaml
 
     with open("configs/models.yaml", "r") as f:
@@ -67,7 +73,6 @@ def process_end_to_end(args):
     if args.reranker not in models_cfg:
         raise ValueError(f"Reranker {args.reranker} not found in models.yaml")
 
-    # We allow the model path to be overridden for fine-tuned checkpoints if they exist
     ce = CrossEncoderReranker(args.reranker, models_cfg[args.reranker])
 
     # 2. Setup metric tracking
@@ -94,7 +99,7 @@ def process_end_to_end(args):
     total_queries = len(queries_df)
 
     # 3. Stage 1: Batch Search
-    print("Executing Stage 1 Search...")
+    logger.info("Stage 1 search ({} queries)...", total_queries)
     start_s1 = time.time()
 
     stage1_candidates_list = []
@@ -104,11 +109,11 @@ def process_end_to_end(args):
         and args.precomputed_candidates
         and args.precomputed_candidates.exists()
     ):
-        print(
-            f"Loading precomputed Stage 1 candidates from {args.precomputed_candidates}..."
+        logger.info(
+            "Loading precomputed candidates from {}",
+            args.precomputed_candidates,
         )
         cand_df = pl.read_parquet(args.precomputed_candidates)
-        # Assuming candidates_json exists and is sorted matching queries_df (we will join by query_id to be safe)
         joined = queries_df.join(cand_df, on="query_id", how="left")
         import json as builtin_json
 
@@ -133,15 +138,13 @@ def process_end_to_end(args):
                     stage1_candidates_list.append([])
         elif stage1_idx is not None and s1_model is not None:
             query_texts = queries_df["query_text_pipe"].to_list()
-            # Batch encode
-            print("Encoding Stage 1 queries...")
+            logger.info("Encoding Stage 1 queries...")
             embs = s1_model.encode(
                 query_texts,
                 batch_size=256,
                 show_progress_bar=True,
                 convert_to_numpy=True,
             )
-            # Search LanceDB
             for emb in tqdm(embs, desc="Vector Search"):
                 try:
                     res = stage1_idx.search(emb).limit(args.top_k_stage1).to_list()
@@ -156,9 +159,11 @@ def process_end_to_end(args):
                 )
 
     stage1_total_time = time.time() - start_s1
+    logger.info("Stage 1 done in {:.1f}s", stage1_total_time)
 
     # 4. Stage 2: Batch Cross-Encoder Scoring
-    print("Preparing Cross-Encoder pairs...")
+    t_pair_start = time.time()
+    logger.info("Serializing candidate pairs...")
     all_pairs = []
     pair_to_query_idx = []
 
@@ -168,7 +173,6 @@ def process_end_to_end(args):
     ):
         true_id = q_row.get("entity_id")
         if not candidates:
-            # Fallback if somehow empty
             candidates = [{"entity_id": true_id, "first_name": "Dummy"}]
             stage1_candidates_list[idx] = candidates
 
@@ -188,22 +192,30 @@ def process_end_to_end(args):
             all_pairs.append((q_str, c_str))
             pair_to_query_idx.append(idx)
 
-    print(f"Scoring {len(all_pairs)} candidate pairs...")
+    logger.info(
+        "Pair serialization: {:.1f}s ({:,} pairs)",
+        time.time() - t_pair_start,
+        len(all_pairs),
+    )
+
+    logger.info("Scoring {:,} pairs with cross-encoder...", len(all_pairs))
     start_s2 = time.time()
-    # Use the wrapper's predict() which conditionally applies sigmoid only
-    # for models that output raw logits (e.g. MiniLM).  Models that already
-    # return probabilities (GTE, BGE, Granite) are left untouched.
     all_scores = ce.predict(all_pairs, batch_size=512, show_progress_bar=True)
 
     stage2_total_time = time.time() - start_s2
+    logger.info("CE scoring done in {:.1f}s", stage2_total_time)
 
-    # Reassemble and compute metrics
-    print("Computing metrics...", flush=True)
+    # 5. Compute metrics
+    t_group_start = time.time()
+    logger.info("Grouping {:,} scores by query...", len(all_scores))
 
-    # Group scores by query index
     grouped_scores = [[] for _ in range(total_queries)]
     for score, idx in zip(all_scores, pair_to_query_idx):
         grouped_scores[idx].append(score)
+    logger.info("Score grouping: {:.1f}s", time.time() - t_group_start)
+
+    t_metrics_start = time.time()
+    logger.info("Computing per-query metrics ({:,} queries)...", total_queries)
 
     for q_idx, (q_row, candidates, scores) in tqdm(
         enumerate(zip(queries_dicts, stage1_candidates_list, grouped_scores)),
@@ -221,17 +233,15 @@ def process_end_to_end(args):
 
         scored_candidates.sort(key=lambda x: x["ce_score"], reverse=True)
 
-        # Full reranked list for metrics
         full_reranked = scored_candidates
 
-        # Compute Metrics for this query
         reranked_ids = [c.get("entity_id") for c in full_reranked]
         query_metrics = compute_metrics(reranked_ids, str(true_id))
 
         r50 = 1.0 if str(true_id) in reranked_ids[:50] else 0.0
         retention = compute_recall_retention(candidates, full_reranked, str(true_id))
 
-        # Mean rank of true match after reranking (1-indexed, 51 if not found)
+        # Mean rank of true match after reranking (1-indexed, N+1 if not found)
         try:
             reranked_rank = reranked_ids.index(str(true_id)) + 1
         except ValueError:
@@ -275,11 +285,16 @@ def process_end_to_end(args):
                 1 if str(c.get("entity_id")) == str(true_id) else 0
             )
 
-    # Aggregate
-    print("Aggregating...", flush=True)
+    logger.info("Per-query metrics: {:.1f}s", time.time() - t_metrics_start)
+
+    # 6. Aggregate + F1 threshold sweep
+    t_agg_start = time.time()
+    logger.info(
+        "Aggregating + F1 sweep ({:,} score/label pairs)...",
+        len(results["overall"]["scores"]),
+    )
     final_metrics = {"overall": {}, "per_bucket": {}}
 
-    # Base overall keys
     for k, v_list in results["overall"].items():
         if k not in ["scores", "labels"]:
             final_metrics["overall"][k] = float(np.mean(v_list)) if v_list else 0.0
@@ -311,6 +326,8 @@ def process_end_to_end(args):
                     float(np.mean(v_list)) if v_list else 0.0
                 )
 
+    logger.info("Aggregation + F1: {:.1f}s", time.time() - t_agg_start)
+
     # Calculate Latency per query in ms
     s1_ms = (stage1_total_time / total_queries) * 1000 if total_queries > 0 else 0.0
     s2_ms = (stage2_total_time / total_queries) * 1000 if total_queries > 0 else 0.0
@@ -320,7 +337,19 @@ def process_end_to_end(args):
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w") as f:
         json.dump(result, f, indent=2)
-    print(f"Results written to {args.output}")
+
+    elapsed = time.time() - t_exp_start
+    logger.success(
+        "Experiment {} done in {:.0f}s | R@1={:.3f} R@10={:.3f} MRR={:.3f} AvgRank={:.1f} RankDelta={:+.1f}",
+        args.experiment_id,
+        elapsed,
+        final_metrics["overall"].get("recall_at_1", 0),
+        final_metrics["overall"].get("recall_at_10", 0),
+        final_metrics["overall"].get("mrr_at_10", 0),
+        final_metrics["overall"].get("mean_reranked_rank", 0),
+        final_metrics["overall"].get("mean_rank_delta", 0),
+    )
+    logger.info("Results written to {}", args.output)
 
 
 if __name__ == "__main__":
