@@ -12,8 +12,6 @@ gte_reranker:
   hf_id: Alibaba-NLP/gte-reranker-modernbert-base
   license: mit
   params: 149M
-gte_reranker_ft:
-  hf_id: jayshah5696/er2-ce-gte-reranker-ft
 minilm_reranker:
   context: 512
   fine_tuned: false

@@ -13,7 +13,7 @@ from pathlib import Path
 
 EVAL_QUERIES_DIR = Path("../entity-resolution-poc/data/eval")
 BM25_CANDIDATES = Path("results/bm25_candidates.parquet")
-DENSE_CANDIDATES = Path("results/dense_candidates.parquet")
+DENSE_CANDIDATES = Path("results/dense_candidates_int8.parquet")
 EXPERIMENTS_DIR = Path("experiments")
 RESULTS_DIR = Path("results")
 

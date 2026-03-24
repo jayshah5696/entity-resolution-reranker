@@ -1,8 +1,8 @@
 {
-  "experiment_id": "009",
+  "experiment_id": "009_int8",
   "latency": {
-    "stage1_ms": 0.018231283340085315,
-    "stage2_ms": 15.352209922590077
+    "stage1_ms": 0.017570663723847305,
+    "stage2_ms": 15.041572936076452
   },
   "metrics": {
     "overall": {
@@ -24,19 +24,19 @@
       "f1_threshold": 4.461920616449788e-05
     },
     "per_bucket": {
-      "pristine": {
-        "recall_at_10": 1.0,
-        "recall_at_1": 1.0,
-        "ndcg_at_1": 1.0,
-        "recall_at_5": 1.0,
-        "ndcg_at_5": 1.0,
-        "ndcg_at_10": 1.0,
-        "precision_at_5": 0.19999999999999996,
-        "mrr_at_10": 1.0,
-        "recall_at_50": 1.0,
-        "recall_retention": 1.0,
-        "mean_reranked_rank": 1.0,
-        "mean_rank_delta": 0.0
+      "typo_name": {
+        "recall_at_10": 0.9996054059386407,
+        "recall_at_1": 0.9996054059386407,
+        "ndcg_at_1": 0.9996054059386407,
+        "recall_at_5": 0.9996054059386407,
+        "ndcg_at_5": 0.9996054059386407,
+        "ndcg_at_10": 0.9996054059386407,
+        "precision_at_5": 0.1999210811877281,
+        "mrr_at_10": 0.9996054059386407,
+        "recall_at_50": 0.9997040544539805,
+        "recall_retention": 0.9997040544539805,
+        "mean_reranked_rank": 1.0179540297918517,
+        "mean_rank_delta": -0.003156752490875012
       },
       "swapped_attributes": {
         "recall_at_10": 0.999408108907961,
@@ -52,19 +52,33 @@
         "mean_reranked_rank": 1.0295945546019531,
         "mean_rank_delta": 0.0
       },
-      "typo_name": {
-        "recall_at_10": 0.9996054059386407,
-        "recall_at_1": 0.9996054059386407,
-        "ndcg_at_1": 0.9996054059386407,
-        "recall_at_5": 0.9996054059386407,
-        "ndcg_at_5": 0.9996054059386407,
-        "ndcg_at_10": 0.9996054059386407,
-        "precision_at_5": 0.1999210811877281,
-        "mrr_at_10": 0.9996054059386407,
-        "recall_at_50": 0.9997040544539805,
-        "recall_retention": 0.9997040544539805,
-        "mean_reranked_rank": 1.0179540297918517,
-        "mean_rank_delta": -0.003156752490875012
+      "pristine": {
+        "recall_at_10": 1.0,
+        "recall_at_1": 1.0,
+        "ndcg_at_1": 1.0,
+        "recall_at_5": 1.0,
+        "ndcg_at_5": 1.0,
+        "ndcg_at_10": 1.0,
+        "precision_at_5": 0.19999999999999996,
+        "mrr_at_10": 1.0,
+        "recall_at_50": 1.0,
+        "recall_retention": 1.0,
+        "mean_reranked_rank": 1.0,
+        "mean_rank_delta": 0.0
+      },
+      "missing_email_company": {
+        "recall_at_10": 0.8545920883890697,
+        "recall_at_1": 0.43277103679589624,
+        "ndcg_at_1": 0.43277103679589624,
+        "recall_at_5": 0.7581138403867022,
+        "ndcg_at_5": 0.6060946967487238,
+        "ndcg_at_10": 0.6375215374932293,
+        "precision_at_5": 0.15162276807734043,
+        "mrr_at_10": 0.5685799389631885,
+        "recall_at_50": 0.958863569103285,
+        "recall_retention": 0.958863569103285,
+        "mean_reranked_rank": 6.447272368550854,
+        "mean_rank_delta": 0.0
       },
       "domain_mismatch": {
         "recall_at_10": 0.9999013514846602,
@@ -93,20 +107,6 @@
         "recall_retention": 0.9972378415704843,
         "mean_reranked_rank": 1.1420538620893756,
         "mean_rank_delta": -0.003945940613593765
-      },
-      "missing_email_company": {
-        "recall_at_10": 0.8545920883890697,
-        "recall_at_1": 0.43277103679589624,
-        "ndcg_at_1": 0.43277103679589624,
-        "recall_at_5": 0.7581138403867022,
-        "ndcg_at_5": 0.6060946967487238,
-        "ndcg_at_10": 0.6375215374932293,
-        "precision_at_5": 0.15162276807734043,
-        "mrr_at_10": 0.5685799389631885,
-        "recall_at_50": 0.958863569103285,
-        "recall_retention": 0.958863569103285,
-        "mean_reranked_rank": 6.447272368550854,
-        "mean_rank_delta": 0.0
       }
     }
   }
