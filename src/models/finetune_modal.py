@@ -22,7 +22,7 @@ def get_repo_name(model_key: str) -> str:
 
 volume = modal.Volume.from_name("er2-ce-checkpoints", create_if_missing=True)
 
-secrets = [modal.Secret.from_name("huggingface")]
+secrets=[modal...e")]
 try:
     # Attempt to load wandb secret if available, else gracefully skip
     secrets.append(modal.Secret.from_name("wandb"))
@@ -33,7 +33,7 @@ except modal.exception.NotFoundError:
     image=image,
     gpu="A100",
     timeout=86400, # 24 hours
-    secrets=secrets,
+    secrets=***
     volumes={"/checkpoints": volume},
 )
 def finetune_one(model_key: str, resume: bool = False, dry_run: bool = False):
@@ -42,10 +42,9 @@ def finetune_one(model_key: str, resume: bool = False, dry_run: bool = False):
     from pathlib import Path
     from datasets import load_dataset
     from sentence_transformers import CrossEncoder
-    from sentence_transformers.cross_encoder.evaluation import CEBinaryClassificationEvaluator
+    from sentence_transformers.cross_encoder.evaluation import CrossEncoderClassificationEvaluator
     from sentence_transformers.cross_encoder import CrossEncoderTrainer, CrossEncoderTrainingArguments
     from sentence_transformers.cross_encoder.losses import BinaryCrossEntropyLoss, LambdaLoss
-    from sentence_transformers import InputExample
     import torch
     
     # HF_HUB_DISABLE_XET is required per plan
@@ -85,11 +84,17 @@ def finetune_one(model_key: str, resume: bool = False, dry_run: bool = False):
     model = CrossEncoder(base_model, num_labels=1, trust_remote_code=True)
     
     # 4. Evaluator setup
-    val_samples = []
-    for row in val_dataset:
-        val_samples.append(InputExample(texts=[row["text_a"], row["text_b"]], label=float(row["label"])))
-        
-    evaluator = CEBinaryClassificationEvaluator.from_input_examples(val_samples, name=model_key)
+    # CrossEncoderClassificationEvaluator (v4+ API, replaces deprecated CEBinaryClassificationEvaluator)
+    val_df = val_dataset.to_pandas()
+    val_sentences1 = val_df["text_a"].tolist()
+    val_sentences2 = val_df["text_b"].tolist()
+    val_labels = val_df["label"].astype(float).tolist()
+    evaluator = CrossEncoderClassificationEvaluator(
+        sentences1=val_sentences1,
+        sentences2=val_sentences2,
+        labels=val_labels,
+        name=model_key,
+    )
     
     # 5. Curriculum Trainer setup
     # The plan requested BCE (epochs 1-3) -> LambdaLoss (epochs 4-5)
@@ -105,6 +110,10 @@ def finetune_one(model_key: str, resume: bool = False, dry_run: bool = False):
             current_epoch = self.state.epoch if self.state.epoch is not None else 0
             # SentenceTransformers v5 dynamically uses self.loss_fct within its super method.
             # We simply overwrite the active trainer's loss_fct property before calling super.
+            # NOTE: LambdaLoss is designed for grouped/ranked data (multiple docs per query with
+            # float relevance scores). On flat binary (text_a, text_b, label=0/1) data it cannot
+            # compute meaningful ranking gradients. Validate that your dataset has group structure
+            # before relying on this curriculum phase for ranking quality gains.
             self.loss_fct = self.bce_loss if current_epoch < 3.0 else self.lambda_loss
             return super().compute_loss(model, inputs, return_outputs=return_outputs, num_items_in_batch=num_items_in_batch)
 
@@ -130,7 +139,8 @@ def finetune_one(model_key: str, resume: bool = False, dry_run: bool = False):
         per_device_eval_batch_size=64,
         learning_rate=2e-5,
         warmup_ratio=0.1,
-        eval_strategy="epoch",
+        eval_strategy="steps",
+        eval_steps=200,
         save_strategy="epoch",
         save_total_limit=2,
         logging_steps=100,
